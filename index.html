@@ -145,7 +145,7 @@
 // ══════════════════════════════════════════════════════
 //  ⚙️  CONFIG – replace these with your actual values!
 // ══════════════════════════════════════════════════════
-const SUPABASE_URL = '/.proxy/supabase';
+const SUPABASE_URL = 'https://exkdlhmgksopppxlaqpr.supabase.co';
 const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImV4a2RsaG1na3NvcHBweGxhcXByIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM0MzE0NjIsImV4cCI6MjA4OTAwNzQ2Mn0.Th9-0cCdJ8YgZcN9HU9GLBoQddR8O7I8fzVUeC3q9hA';
 const DISCORD_CLIENT_ID = '1481762798210908301';
 // ══════════════════════════════════════════════════════
@@ -171,7 +171,7 @@ async function initDiscord() {
 
     // Exchange code for token via your backend OR use the direct approach:
     // For testing without a backend, we fall back to a guest name
-    const tokenRes = await fetch('/.proxy/api/token', {
+    const tokenRes = await fetch('/.netlify/functions/token', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ code }),
@@ -208,23 +208,33 @@ initDiscord();
 // ── Supabase helpers ───────────────────────────────────
 async function saveScore(scoreVal) {
   if (!discordUser) return;
+  const newScore = Math.floor(scoreVal);
   try {
+    const checkRes = await fetch(
+      `${SUPABASE_URL}/rest/v1/scores?user_id=eq.${discordUser.id}&select=score`,
+      { headers: { 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}` } }
+    );
+    const existing = await checkRes.json();
+    if (existing.length > 0 && existing[0].score >= newScore) {
+      setLbStatus(`Not a new record. Your best: ${existing[0].score}`);
+      return;
+    }
     const res = await fetch(`${SUPABASE_URL}/rest/v1/scores`, {
       method: 'POST',
       headers: {
         'apikey': SUPABASE_KEY,
         'Authorization': `Bearer ${SUPABASE_KEY}`,
         'Content-Type': 'application/json',
-        'Prefer': 'return=minimal',
+        'Prefer': 'resolution=merge-duplicates,return=minimal',
       },
       body: JSON.stringify({
         user_id:  discordUser.id,
         username: discordUser.username,
         avatar:   discordUser.avatar,
-        score:    Math.floor(scoreVal),
+        score:    newScore,
       }),
     });
-    if (res.ok) setLbStatus('Score saved! ✓');
+    if (res.ok) setLbStatus(existing.length > 0 ? '🏆 New personal best!' : 'Score saved! ✓');
     else        setLbStatus('Could not save score.');
   } catch(e) {
     setLbStatus('Offline – score not saved.');
