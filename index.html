@@ -59,14 +59,6 @@
     display:flex; align-items:center; gap:6px; font-size:0.75rem; color:#a78bfa; padding:3px 0;
   }
   .plat-dot { width:10px; height:10px; border-radius:3px; flex-shrink:0; }
-  .mode-btn {
-    font-family:'Patrick Hand',cursive; font-size:0.8rem; color:#c4b5fd;
-    background:rgba(88,101,242,0.15); border:1px solid rgba(124,58,237,0.4);
-    border-radius:8px; padding:7px 10px; cursor:pointer; text-align:left;
-    transition:background .15s, border-color .15s; width:100%;
-  }
-  .mode-btn:hover { background:rgba(124,58,237,0.3); border-color:#7c3aed; }
-  .mode-btn.active { background:rgba(124,58,237,0.4); border-color:#a78bfa; color:#fff; }
   .mode-btn .mode-name { font-size:0.88rem; color:#fff; display:block; }
   .mode-btn .mode-desc { font-size:0.7rem; color:#8b7aa0; }
 
@@ -117,6 +109,17 @@
   #shootBtn { width:48px; height:48px; font-size:1.2rem; background:rgba(88,101,242,0.25); border-color:#5865f2; }
   @media (pointer:coarse) { #mobileControls { display:flex; } }
 
+  /* Sacrifice button in HUD */
+  #sacrificeBtn {
+    font-family:'Patrick Hand',cursive; font-size:0.72rem; color:#f9a8d4;
+    background:rgba(236,72,153,0.2); border:1.5px solid #ec4899;
+    border-radius:8px; padding:3px 7px; cursor:pointer; pointer-events:all;
+    transition:all .15s; white-space:nowrap; line-height:1.3;
+  }
+  #sacrificeBtn:hover:not(:disabled) { background:rgba(236,72,153,0.4); color:#fff; }
+  #sacrificeBtn:disabled { opacity:0.4; cursor:not-allowed; }
+  #sacrificeBtn .cooldown-text { font-size:0.65rem; display:block; color:#a78bfa; }
+
   /* ── Right panel (leaderboard) ── */
   #rightPanel { align-self: start; }
   #leaderboard {
@@ -157,9 +160,7 @@
     border-radius:8px; padding:5px 4px; cursor:pointer; transition:all .15s;
   }
   .tab-btn.active { background:rgba(124,58,237,0.35); border-color:#7c3aed; color:#c9aaff; }
-  .tab-btn:hover:not(.active) { background:rgba(124,58,237,0.2); color:#a78bfa; }
-  .live-indicator { display:inline-block; width:6px; height:6px; border-radius:50%; background:#4ade80; margin-right:4px; animation: pulse 1.2s infinite; }
-  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.3} }
+  .tab-btn:hover:not(.active) { background:rgba(124,58,237,0.2); color:#a78bfa; } 50%{opacity:0.3} }
 </style>
 </head>
 <body>
@@ -181,21 +182,6 @@
     <div class="platform-row"><div class="plat-dot" style="background:#ef4444"></div> Breaking – one jump</div>
     <div class="platform-row"><div class="plat-dot" style="background:#a78bfa"></div> Spring – mega boost</div>
     <div class="platform-row"><div class="plat-dot" style="background:#ec4899"></div> Teleport – random pos</div>
-
-    <div class="panel-title" style="margin-top:4px">🎮 Game Mode</div>
-    <button class="mode-btn active" id="modeNormal">
-      <span class="mode-name">⚔️ Normal</span>
-      <span class="mode-desc">Competitive · Global Leaderboard</span>
-    </button>
-    <button class="mode-btn" id="modeCasual">
-      <span class="mode-name">🎤 Casual</span>
-      <span class="mode-desc">Scream to heal · Own Leaderboard</span>
-    </button>
-    <button class="mode-btn" id="modeStupid">
-      <span class="mode-name">🤪 Stupid</span>
-      <span class="mode-desc">SCREAM = JUMP BOOST 🔊💥</span>
-    </button>
-    <div id="micStatus" style="display:none;font-size:0.72rem;color:#a78bfa;text-align:center;line-height:1.4;margin-top:2px"></div>
   </div>
 
   <!-- MIDDLE – game -->
@@ -206,6 +192,7 @@
         <span class="hud-item" id="scoreHud">0</span>
         <span class="hud-item" id="livesHud">💜💜💜</span>
         <span class="hud-item" id="bestHud">Best:0</span>
+        <button id="sacrificeBtn" title="-100 pts = +1 life">💔→💜</button>
       </div>
       <div id="overlay">
         <h2>HogJumper</h2>
@@ -215,13 +202,14 @@
         <button id="startBtn">START!</button>
         <div id="overlayControls">
           ← → / A D · Move &nbsp;|&nbsp; SPACE / ↑ · Shoot<br>
-          Bounce as high as possible!
+          E · Sacrifice 100pts for +1 Life (15s cooldown)
         </div>
       </div>
     </div>
     <div id="mobileControls">
       <div class="mBtn" id="leftBtn">◀</div>
       <div class="mBtn" id="shootBtn">🔫</div>
+      <div class="mBtn" id="sacrificeMBtn">💔</div>
       <div class="mBtn" id="rightBtn">▶</div>
     </div>
   </div>
@@ -231,8 +219,6 @@
     <div style="display:flex;gap:4px;margin-bottom:2px;flex-wrap:wrap">
       <button class="tab-btn active" id="tabLive">⚡ Live</button>
       <button class="tab-btn" id="tabAll">🏆 Normal</button>
-      <button class="tab-btn" id="tabCasual">🎤 Casual</button>
-      <button class="tab-btn" id="tabStupid">🤪 Stupid</button>
     </div>
     <div id="leaderboard"><div class="lb-loading">Loading...</div></div>
     <div id="lbSaveStatus"></div>
@@ -245,112 +231,7 @@ const SUPABASE_URL = '/.proxy/supabase';
 const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImV4a2RsaG1na3NvcHBweGxhcXByIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM0MzE0NjIsImV4cCI6MjA4OTAwNzQ2Mn0.Th9-0cCdJ8YgZcN9HU9GLBoQddR8O7I8fzVUeC3q9hA';
 const DISCORD_CLIENT_ID = '1481762798210908301';
 
-// ── Game Mode ──────────────────────────────────────────
-let gameMode = 'normal'; // 'normal' | 'casual'
 
-// ── Microphone Heal System ─────────────────────────────
-let micStream = null, micAnalyser = null, micData = null;
-let micVolume = 0, micHealAccum = 0, healCooldown = 0;
-const MIC_HEAL_THRESHOLD = 0.3;
-const MIC_HEAL_RATE = 0.006;
-
-async function initMic() {
-  try {
-    // Stop any existing stream first
-    stopMic();
-    // Use existing AudioContext or create new one
-    initAC(); // reuse game's AC
-    micStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
-    await AC.resume();
-    const source = AC.createMediaStreamSource(micStream);
-    micAnalyser = AC.createAnalyser();
-    micAnalyser.fftSize = 512;
-    micAnalyser.smoothingTimeConstant = 0.6;
-    source.connect(micAnalyser);
-    micData = new Uint8Array(micAnalyser.frequencyBinCount);
-    const msg = gameMode==='stupid'
-      ? '🤪 Mic active – SCREAM TO JUMP!'
-      : '🎤 Mic active – scream to heal!';
-    document.getElementById('micStatus').textContent = msg;
-    document.getElementById('micStatus').style.display = 'block';
-    return true;
-  } catch(e) {
-    console.warn('Mic error:', e);
-    document.getElementById('micStatus').textContent = '🎤 Mic blocked – try allowing mic access';
-    document.getElementById('micStatus').style.display = 'block';
-    return false;
-  }
-}
-
-function stopMic() {
-  if (micStream) { micStream.getTracks().forEach(t => t.stop()); micStream = null; }
-  micAnalyser = null; micData = null; micVolume = 0; micHealAccum = 0;
-}
-
-function updateMic() {
-  if (!micAnalyser || !micData) { micVolume = 0; return; }
-  micAnalyser.getByteFrequencyData(micData);
-  const avg = micData.reduce((a, b) => a + b, 0) / micData.length;
-  micVolume = Math.min(avg / 100, 1);
-}
-
-import { DiscordSDK } from 'https://cdn.jsdelivr.net/npm/@discord/embedded-app-sdk@1.2.0/+esm';
-
-let discordUser = null;
-let discordReady = false;
-let discordChannelId = 'local'; // fallback if not in Discord
-
-async function initDiscord() {
-  try {
-    const sdk = new DiscordSDK(DISCORD_CLIENT_ID);
-    await sdk.ready();
-
-    // Get channel ID for multiplayer grouping
-    try {
-      const { channel_id } = await sdk.commands.getInstanceConnectedParticipants();
-      if (channel_id) discordChannelId = channel_id;
-    } catch(e) {
-      // fallback: use instance ID
-      discordChannelId = sdk.instanceId || 'local';
-    }
-
-    const { code } = await sdk.commands.authorize({
-      client_id: DISCORD_CLIENT_ID,
-      response_type: 'code',
-      state: '',
-      prompt: 'none',
-      scope: ['identify'],
-    });
-    const tokenRes = await fetch('/.netlify/functions/token', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ code }),
-    }).catch(() => null);
-    if (tokenRes?.ok) {
-      const { access_token } = await tokenRes.json();
-      await sdk.commands.authenticate({ access_token });
-      const userData = await fetch('https://discord.com/api/users/@me', {
-        headers: { Authorization: `Bearer ${access_token}` },
-      }).then(r => r.json());
-      discordUser = {
-        id: userData.id,
-        username: userData.username,
-        avatar: userData.avatar
-          ? `https://cdn.discordapp.com/avatars/${userData.id}/${userData.avatar}.png?size=64`
-          : null,
-      };
-    } else {
-      discordUser = { id: 'guest_' + Math.random().toString(36).slice(2), username: 'Guest', avatar: null };
-    }
-    discordReady = true;
-    setLbStatus('Logged in as ' + discordUser.username);
-  } catch (e) {
-    discordUser = { id: 'anon_' + Math.random().toString(36).slice(2), username: 'Anonymous', avatar: null };
-    discordReady = true;
-    setLbStatus('Playing as Anonymous');
-  }
-}
-initDiscord();
 
 // ── Live Multiplayer Session ───────────────────────────
 let livePollingInterval = null;
@@ -455,7 +336,7 @@ function stopLivePolling() {
 async function saveScore(scoreVal) {
   if (!discordUser) return;
   const newScore = Math.floor(scoreVal);
-  const mode = gameMode;
+  const mode = 'normal';
   try {
     const checkRes = await fetch(
       `${SUPABASE_URL}/rest/v1/scores?user_id=eq.${discordUser.id}&mode=eq.${mode}&select=score`,
@@ -497,15 +378,15 @@ async function loadLeaderboard(mode='normal') {
     );
     if (!res.ok) throw new Error('fetch failed');
     const rows = await res.json();
-    renderLeaderboard(rows, mode==='casual');
+    renderLeaderboard(rows);
   } catch(e) {
     el.innerHTML = '<div class="lb-loading" style="color:#ef4444">Could not load scores.</div>';
   }
 }
 
-function renderLeaderboard(rows, isCasual=false) {
+function renderLeaderboard(rows) {
   const el = document.getElementById('leaderboard');
-  if (!rows.length) { el.innerHTML = `<div class="lb-loading">No ${isCasual?'casual':'normal'} scores yet!</div>`; return; }
+  if (!rows.length) { el.innerHTML = `<div class="lb-loading">No scores yet – be first!</div>`; return; }
   const rankSymbols = ['🥇','🥈','🥉'];
   const rankClasses = ['gold','silver','bronze'];
   el.innerHTML = rows.map((r, i) => {
@@ -520,7 +401,7 @@ function renderLeaderboard(rows, isCasual=false) {
         <span class="lb-rank ${rankCls}">${rankLabel}</span>
         ${avatarEl}
         <span class="lb-name">${escHtml(r.username || 'Unknown')}${isMe ? ' 👈' : ''}</span>
-        <span class="lb-score">${r.score.toLocaleString()}${isCasual?' 🎤':''}</span>
+        <span class="lb-score">${r.score.toLocaleString()}</span>
       </div>`;
   }).join('');
 }
@@ -530,35 +411,6 @@ function escHtml(s) {
 }
 let currentTab = 'live';
 
-async function setMode(mode) {
-  if(state==='playing') return; // can't change mode mid-game!
-  gameMode = mode;
-  ['Normal','Casual','Stupid'].forEach(m => {
-    document.getElementById('mode'+m).classList.toggle('active', mode===m.toLowerCase());
-  });
-  const needsMic = mode==='casual'||mode==='stupid';
-  if(needsMic) await initMic();
-  else {
-    stopMic();
-    document.getElementById('micStatus').style.display='none';
-  }
-  if(mode==='stupid'){
-    document.getElementById('micStatus').textContent='🤪 SCREAM to JUMP BOOST! Louder = Higher!';
-    document.getElementById('micStatus').style.display='block';
-    document.getElementById('micStatus').style.color='#f472b6';
-  } else if(mode==='casual'){
-    document.getElementById('micStatus').style.color='#a78bfa';
-  }
-}
-
-function setModeBtnsDisabled(disabled) {
-  ['modeNormal','modeCasual','modeStupid'].forEach(id => {
-    const el = document.getElementById(id);
-    el.disabled = disabled;
-    el.style.opacity = disabled ? '0.4' : '1';
-    el.style.cursor = disabled ? 'not-allowed' : 'pointer';
-  });
-}
 
 function showTab(tab) {
   currentTab = tab;
@@ -567,8 +419,6 @@ function showTab(tab) {
     if(el) el.classList.toggle('active', tab===t.toLowerCase());
   });
   if (tab==='live') pollLivePlayers();
-  else if(tab==='casual') loadLeaderboard('casual');
-  else if(tab==='stupid') loadLeaderboard('stupid');
   else loadLeaderboard('normal');
 }
 
@@ -612,7 +462,7 @@ let frameCount=0;
 let comboCount=0,comboTimer=0;
 let shieldActive=false,shieldTimer=0;
 let jetpackActive=false,jetpackTimer=0;
-let invincible=0, screenShake=0, shootCooldown=0;
+let invincible=0, screenShake=0, shootCooldown=0, sacrificeCooldown=0;
 
 const GRAVITY=0.11, JUMP_VEL=-7.0, SPRING_VEL=-13.0, JETPACK_VEL=-10.0, SPEED=3.8;
 const SCROLL_TRIGGER=H*0.42;
@@ -672,6 +522,27 @@ function shoot(){
   if(shootCooldown>0) return;
   shootCooldown=35; sndShoot();
   bullets.push({x:player.x+player.w/2,y:player.y-4,vy:-8,life:1});
+}
+
+const SACRIFICE_COST = 100;
+const SACRIFICE_COOLDOWN_SECS = 15; // seconds
+function sacrificeScore(){
+  if(state!=='playing') return;
+  if(sacrificeCooldown>0) return;
+  if(score < SACRIFICE_COST){
+    floatText(player.x+player.w/2, player.y+cameraY-30, '❌ Need 100 pts!', '#ef4444', 16);
+    return;
+  }
+  if(lives >= 5){
+    floatText(player.x+player.w/2, player.y+cameraY-30, '❌ Max lives!', '#ef4444', 16);
+    return;
+  }
+  score -= SACRIFICE_COST;
+  lives++;
+  sacrificeCooldown = SACRIFICE_COOLDOWN_SECS * 60; // in frames
+  floatText(player.x+player.w/2, player.y+cameraY-40, '💜 +1 LIFE  -100pts', '#f9a8d4', 18);
+  spawnPfx(player.x+player.w/2, player.y+player.h/2, '#ec4899', 10, 4);
+  beep(300,0.05,'sine',0.1); beep(500,0.1,'sine',0.1); beep(700,0.15,'sine',0.08);
 }
 function floatText(x,y,txt,color='#c9aaff',size=18){
   floatTexts.push({x,y,txt,color,size,life:1,vy:-1.1});
@@ -919,39 +790,6 @@ function drawMonsters(){
   }
 }
 
-function drawMicMeter(){
-  const bx=8, by=H-60, bw=14, bh=50;
-  // Background
-  ctx.fillStyle='rgba(0,0,0,0.4)';
-  roundRect(ctx,bx-2,by-2,bw+4,bh+4,4); ctx.fill();
-  // Track
-  ctx.fillStyle='rgba(255,255,255,0.1)';
-  roundRect(ctx,bx,by,bw,bh,3); ctx.fill();
-  // Volume fill
-  const fillH = bh * micVolume;
-  const SCREAM_T = gameMode==='stupid' ? 0.4 : MIC_HEAL_THRESHOLD;
-  const color = micVolume > SCREAM_T
-    ? (gameMode==='stupid' ? '#f472b6' : (healCooldown>0 ? '#fbbf24' : '#4ade80'))
-    : '#6366f1';
-  ctx.fillStyle=color;
-  roundRect(ctx,bx,by+bh-fillH,bw,fillH,3); ctx.fill();
-  // Threshold line
-  ctx.strokeStyle='#fff';ctx.lineWidth=1.5;ctx.globalAlpha=0.6;
-  const ty=by+bh*(1-SCREAM_T);
-  ctx.beginPath();ctx.moveTo(bx,ty);ctx.lineTo(bx+bw,ty);ctx.stroke();
-  ctx.globalAlpha=1;
-  // Accumulator ring
-  if(micVolume>MIC_HEAL_THRESHOLD&&healCooldown<=0){
-    ctx.strokeStyle='#4ade80';ctx.lineWidth=2;
-    ctx.beginPath();
-    ctx.arc(bx+bw/2,by-12,8,-(Math.PI/2),(-(Math.PI/2))+(Math.PI*2*micHealAccum));
-    ctx.stroke();
-  }
-  // Mic icon
-  ctx.fillStyle='#fff';ctx.font='12px serif';ctx.textAlign='center';ctx.textBaseline='middle';
-  ctx.fillText('🎤',bx+bw/2,by-12);
-}
-
 function drawPfx(){
   for(const p of particles){
     ctx.save();ctx.globalAlpha=p.life;ctx.fillStyle=p.color;
@@ -976,6 +814,23 @@ function update(dt=1){
   else player.vx*=Math.pow(0.85,dt);
   if(doShoot){ shoot(); if(keys[' '])keys[' ']=2; if(keys['ArrowUp'])keys['ArrowUp']=2; if(keys['w'])keys['w']=2; if(keys['W'])keys['W']=2; }
   if(shootCooldown>0) shootCooldown-=dt;
+  if(sacrificeCooldown>0) sacrificeCooldown-=dt;
+
+  // Update sacrifice button state
+  const sBtn2 = document.getElementById('sacrificeBtn');
+  if(sBtn2){
+    const cdSecs = Math.ceil(sacrificeCooldown/60);
+    if(sacrificeCooldown>0){
+      sBtn2.disabled=true;
+      sBtn2.innerHTML=`💔→💜<span class="cooldown-text">${cdSecs}s</span>`;
+    } else if(score<SACRIFICE_COST){
+      sBtn2.disabled=true;
+      sBtn2.innerHTML=`💔→💜<span class="cooldown-text">need 100</span>`;
+    } else {
+      sBtn2.disabled=false;
+      sBtn2.innerHTML=`💔→💜<span class="cooldown-text">-100pts</span>`;
+    }
+  }
   if(jetpackActive){jetpackTimer-=dt;player.vy+=(JETPACK_VEL-player.vy)*0.07*dt;spawnPfx(player.x+player.w/2,player.y+player.h,'#7c3aed',1,2);if(jetpackTimer<=0)jetpackActive=false;}
   else player.vy+=GRAVITY*dt;
   if(shieldActive){shieldTimer-=dt;if(shieldTimer<=0)shieldActive=false;}
@@ -1056,45 +911,7 @@ function update(dt=1){
   if(screenShake>0)screenShake-=dt;
 
   // ── Mic Effects ──
-  if(gameMode==='casual'||gameMode==='stupid'){
-    updateMic();
-    if(gameMode==='casual'){
-      if(healCooldown>0) healCooldown-=dt;
-      if(micVolume>MIC_HEAL_THRESHOLD && healCooldown<=0){
-        micHealAccum += (micVolume - MIC_HEAL_THRESHOLD) * MIC_HEAL_RATE * dt;
-        if(micHealAccum >= 1){
-          micHealAccum = 0;
-          if(lives < 5){
-            lives++;
-            healCooldown = 180;
-            floatText(player.x+player.w/2, player.y+cameraY-40, '💚 HEAL!', '#4ade80', 22);
-            spawnPfx(player.x+player.w/2, player.y+player.h/2, '#4ade80', 10, 4);
-            beep(600, 0.1, 'sine', 0.1); beep(800, 0.15, 'sine', 0.08);
-          }
-        }
-      } else if(micVolume<=MIC_HEAL_THRESHOLD){
-        micHealAccum = Math.max(0, micHealAccum - 0.01*dt);
-      }
-    } else if(gameMode==='stupid'){
-      // Scream = instant jump boost!
-      const SCREAM_THRESHOLD = 0.4;
-      if(micVolume > SCREAM_THRESHOLD){
-        const boost = JUMP_VEL * (1 + micVolume * 2.5); // louder = higher
-        if(player.vy > boost * 0.5){ // only boost when falling or weak jump
-          player.vy = boost;
-          player.squish = 0.4;
-          spawnPfx(player.x+player.w/2, player.y+player.h, '#f472b6', 3, 3);
-          // Show volume as text
-          if(Math.floor(frameCount)%8===0){
-            const vol = Math.floor(micVolume*100);
-            floatText(player.x+player.w/2, player.y+cameraY-20,
-              vol>80?'😱 AAAA!':vol>60?'😤 YEAH!':'🎤 '+vol+'%',
-              '#f472b6', 14);
-          }
-        }
-      }
-    }
-  }
+
   for(const m of [100,300,600,1000,2000,5000,10000]){
     if(Math.floor(score)===m&&!window['_ms'+m]){
       window['_ms'+m]=true;
@@ -1114,7 +931,6 @@ function loop(timestamp){
   const sy=screenShake>0?(Math.random()-0.5)*screenShake:0;
   ctx.save();ctx.translate(sx,sy);
   drawBg();drawPlatforms();drawCoins();drawPowerups();drawMonsters();drawPlayer();drawBullets();drawPfx();
-  if(gameMode==='casual'||gameMode==='stupid') drawMicMeter();
   ctx.restore();
   document.getElementById('scoreHud').textContent=Math.floor(score);
   document.getElementById('bestHud').textContent='Best:'+Math.floor(best);
@@ -1129,51 +945,40 @@ async function showGameOver(){
   document.getElementById('finalBest').textContent='🏆 Best Result: '+Math.floor(best);
   document.getElementById('startBtn').textContent='RETRY!';
   document.getElementById('overlay').style.display='flex';
-  setModeBtnsDisabled(false); // unlock mode selection
-  if(gameMode==='casual'||gameMode==='stupid') stopMic();
   setLbStatus('Saving score...');
   await updateLiveScore(score, false);
   await saveScore(score);
-  if(gameMode==='casual') showTab('casual');
-  else if(gameMode==='stupid') showTab('stupid');
-  else showTab('all');
+  showTab('all');
   state='menu';
 }
 
 function startGame(){
   initAC();AC.resume();
-  score=0;lives=3;cameraY=0;frameCount=0;shootCooldown=0;screenShake=0;
-  micHealAccum=0;healCooldown=0;
+  score=0;lives=3;cameraY=0;frameCount=0;shootCooldown=0;screenShake=0;sacrificeCooldown=0;
+  
   particles=[];floatTexts=[];bullets=[];monsters=[];coins=[];powerups=[];
   shieldActive=false;jetpackActive=false;invincible=0;comboCount=0;comboTimer=0;
   for(const m of [100,300,600,1000,2000,5000,10000])delete window['_ms'+m];
   resetPlayer();generatePlatforms();generateStars();
   player.vy=JUMP_VEL;
   document.getElementById('overlay').style.display='none';
-  setModeBtnsDisabled(true); // lock mode during game
   showTab('live');
   startLivePolling();
-  if(gameMode==='casual'||gameMode==='stupid') initMic();
   state='playing';
 }
 
 document.getElementById('startBtn').addEventListener('click',startGame);
+document.getElementById('sacrificeBtn').addEventListener('click',sacrificeScore);
+document.getElementById('sacrificeMBtn').addEventListener('pointerdown',sacrificeScore);
 document.getElementById('lbRefresh').addEventListener('click',()=>{
-  if(currentTab==='live') pollLivePlayers();
-  else if(currentTab==='casual') loadLeaderboard('casual');
-  else if(currentTab==='stupid') loadLeaderboard('stupid');
-  else loadLeaderboard('normal');
+  if(currentTab==='live') pollLivePlayers(); else loadLeaderboard('normal');
 });
 document.getElementById('tabLive').addEventListener('click',()=>showTab('live'));
 document.getElementById('tabAll').addEventListener('click',()=>showTab('all'));
-document.getElementById('tabCasual').addEventListener('click',()=>showTab('casual'));
-document.getElementById('tabStupid').addEventListener('click',()=>showTab('stupid'));
-document.getElementById('modeNormal').addEventListener('click',()=>setMode('normal'));
-document.getElementById('modeCasual').addEventListener('click',()=>setMode('casual'));
-document.getElementById('modeStupid').addEventListener('click',()=>setMode('stupid'));
 window.addEventListener('keydown',e=>{
   if(!keys[e.key]) keys[e.key]=1; else keys[e.key]=2;
   if(state==='menu'&&(e.key===' '||e.key==='Enter'))startGame();
+  if(e.key==='e'||e.key==='E') sacrificeScore();
   if(e.key===' '||e.key==='ArrowUp')e.preventDefault();
 });
 window.addEventListener('keyup',e=>keys[e.key]=false);
