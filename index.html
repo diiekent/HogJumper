@@ -172,7 +172,7 @@
     <div class="panel-title">📖 How to Play</div>
     <div class="how-to-row"><span>⬅️➡️</span><span>Move left / right (A/D)</span></div>
     <div class="how-to-row"><span>🔫</span><span>SPACE / ↑ to shoot</span></div>
-    <div class="how-to-row"><span>🎯</span><span>Land on platforms to bounce higher</span></div>
+    <div class="how-to-row"><span>🎯</span><span>Land on platforms to go higher</span></div>
     <div class="how-to-row"><span>💀</span><span>Don't fall off the bottom!</span></div>
 
     <div class="panel-title" style="margin-top:4px">🟦 Platforms</div>
@@ -182,11 +182,20 @@
     <div class="platform-row"><div class="plat-dot" style="background:#a78bfa"></div> Spring – mega boost</div>
     <div class="platform-row"><div class="plat-dot" style="background:#ec4899"></div> Teleport – random pos</div>
 
-    <div class="panel-title" style="margin-top:4px">⚡ Power-ups</div>
-    <div class="how-to-row"><span>🚀</span><span>Jetpack – fly upward</span></div>
-    <div class="how-to-row"><span>🛡️</span><span>Shield – blocks one hit</span></div>
-    <div class="how-to-row"><span>💎</span><span>Nitro coins – +10 pts</span></div>
-    <div class="how-to-row"><span>👾</span><span>Shoot monsters for +50!</span></div>
+    <div class="panel-title" style="margin-top:4px">🎮 Game Mode</div>
+    <button class="mode-btn active" id="modeNormal">
+      <span class="mode-name">⚔️ Normal</span>
+      <span class="mode-desc">Competitive · Global Leaderboard</span>
+    </button>
+    <button class="mode-btn" id="modeCasual">
+      <span class="mode-name">🎤 Casual</span>
+      <span class="mode-desc">Scream to heal · Own Leaderboard</span>
+    </button>
+    <button class="mode-btn" id="modeStupid">
+      <span class="mode-name">🤪 Stupid</span>
+      <span class="mode-desc">SCREAM = JUMP BOOST 🔊💥</span>
+    </button>
+    <div id="micStatus" style="display:none;font-size:0.72rem;color:#a78bfa;text-align:center;line-height:1.4;margin-top:2px"></div>
   </div>
 
   <!-- MIDDLE – game -->
@@ -219,9 +228,11 @@
 
   <!-- RIGHT PANEL – live race + leaderboard -->
   <div class="panel" id="rightPanel">
-    <div style="display:flex;gap:6px;margin-bottom:2px">
-      <button class="tab-btn active" id="tabLive">⚡ Live Race</button>
-      <button class="tab-btn" id="tabAll">🏆 All-Time</button>
+    <div style="display:flex;gap:4px;margin-bottom:2px;flex-wrap:wrap">
+      <button class="tab-btn active" id="tabLive">⚡ Live</button>
+      <button class="tab-btn" id="tabAll">🏆 Normal</button>
+      <button class="tab-btn" id="tabCasual">🎤 Casual</button>
+      <button class="tab-btn" id="tabStupid">🤪 Stupid</button>
     </div>
     <div id="leaderboard"><div class="lb-loading">Loading...</div></div>
     <div id="lbSaveStatus"></div>
@@ -233,6 +244,46 @@
 const SUPABASE_URL = '/.proxy/supabase';
 const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImV4a2RsaG1na3NvcHBweGxhcXByIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM0MzE0NjIsImV4cCI6MjA4OTAwNzQ2Mn0.Th9-0cCdJ8YgZcN9HU9GLBoQddR8O7I8fzVUeC3q9hA';
 const DISCORD_CLIENT_ID = '1481762798210908301';
+
+// ── Game Mode ──────────────────────────────────────────
+let gameMode = 'normal'; // 'normal' | 'casual'
+
+// ── Microphone Heal System ─────────────────────────────
+let micStream = null, micAnalyser = null, micData = null;
+let micVolume = 0, micHealAccum = 0, healCooldown = 0;
+const MIC_HEAL_THRESHOLD = 0.3;
+const MIC_HEAL_RATE = 0.006;
+
+async function initMic() {
+  try {
+    micStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+    const micAC = new AudioContext();
+    const source = micAC.createMediaStreamSource(micStream);
+    micAnalyser = micAC.createAnalyser();
+    micAnalyser.fftSize = 256;
+    source.connect(micAnalyser);
+    micData = new Uint8Array(micAnalyser.frequencyBinCount);
+    document.getElementById('micStatus').textContent = '🎤 Mic active – scream to heal!';
+    document.getElementById('micStatus').style.display = 'block';
+    return true;
+  } catch(e) {
+    document.getElementById('micStatus').textContent = '🎤 No mic access – healing disabled';
+    document.getElementById('micStatus').style.display = 'block';
+    return false;
+  }
+}
+
+function stopMic() {
+  if (micStream) { micStream.getTracks().forEach(t => t.stop()); micStream = null; }
+  micAnalyser = null; micData = null; micVolume = 0; micHealAccum = 0;
+}
+
+function updateMic() {
+  if (!micAnalyser || !micData) { micVolume = 0; return; }
+  micAnalyser.getByteFrequencyData(micData);
+  const avg = micData.reduce((a, b) => a + b, 0) / micData.length;
+  micVolume = Math.min(avg / 100, 1);
+}
 
 import { DiscordSDK } from 'https://cdn.jsdelivr.net/npm/@discord/embedded-app-sdk@1.2.0/+esm';
 
@@ -395,46 +446,31 @@ function stopLivePolling() {
 async function saveScore(scoreVal) {
   if (!discordUser) return;
   const newScore = Math.floor(scoreVal);
+  const mode = gameMode;
   try {
-    // Check existing score
     const checkRes = await fetch(
-      `${SUPABASE_URL}/rest/v1/scores?user_id=eq.${discordUser.id}&select=score`,
+      `${SUPABASE_URL}/rest/v1/scores?user_id=eq.${discordUser.id}&mode=eq.${mode}&select=score`,
       { headers: { 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}` } }
     );
     const existing = await checkRes.json();
-
     if (existing.length > 0 && existing[0].score >= newScore) {
       setLbStatus(`Not a new record. Your best: ${existing[0].score}`);
       return;
     }
-
     let res;
     if (existing.length > 0) {
-      // UPDATE existing row
-      res = await fetch(`${SUPABASE_URL}/rest/v1/scores?user_id=eq.${discordUser.id}`, {
+      res = await fetch(`${SUPABASE_URL}/rest/v1/scores?user_id=eq.${discordUser.id}&mode=eq.${mode}`, {
         method: 'PATCH',
-        headers: {
-          'apikey': SUPABASE_KEY,
-          'Authorization': `Bearer ${SUPABASE_KEY}`,
-          'Content-Type': 'application/json',
-          'Prefer': 'return=minimal',
-        },
+        headers: { 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}`, 'Content-Type': 'application/json', 'Prefer': 'return=minimal' },
         body: JSON.stringify({ score: newScore, username: discordUser.username, avatar: discordUser.avatar }),
       });
     } else {
-      // INSERT new row
       res = await fetch(`${SUPABASE_URL}/rest/v1/scores`, {
         method: 'POST',
-        headers: {
-          'apikey': SUPABASE_KEY,
-          'Authorization': `Bearer ${SUPABASE_KEY}`,
-          'Content-Type': 'application/json',
-          'Prefer': 'return=minimal',
-        },
-        body: JSON.stringify({ user_id: discordUser.id, username: discordUser.username, avatar: discordUser.avatar, score: newScore }),
+        headers: { 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}`, 'Content-Type': 'application/json', 'Prefer': 'return=minimal' },
+        body: JSON.stringify({ user_id: discordUser.id, username: discordUser.username, avatar: discordUser.avatar, score: newScore, mode }),
       });
     }
-
     if (res.ok) setLbStatus(existing.length > 0 ? '🏆 New personal best!' : 'Score saved! ✓');
     else { const err = await res.text(); setLbStatus('Error: ' + err.slice(0,60)); }
   } catch(e) {
@@ -442,25 +478,25 @@ async function saveScore(scoreVal) {
   }
 }
 
-async function loadLeaderboard() {
+async function loadLeaderboard(mode='normal') {
   const el = document.getElementById('leaderboard');
   el.innerHTML = '<div class="lb-loading">Loading...</div>';
   try {
     const res = await fetch(
-      `${SUPABASE_URL}/rest/v1/scores?select=username,avatar,score,user_id&order=score.desc&limit=10`,
+      `${SUPABASE_URL}/rest/v1/scores?select=username,avatar,score,user_id,mode&mode=eq.${mode}&order=score.desc&limit=10`,
       { headers: { 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}` } }
     );
     if (!res.ok) throw new Error('fetch failed');
     const rows = await res.json();
-    renderLeaderboard(rows);
+    renderLeaderboard(rows, mode==='casual');
   } catch(e) {
     el.innerHTML = '<div class="lb-loading" style="color:#ef4444">Could not load scores.</div>';
   }
 }
 
-function renderLeaderboard(rows) {
+function renderLeaderboard(rows, isCasual=false) {
   const el = document.getElementById('leaderboard');
-  if (!rows.length) { el.innerHTML = '<div class="lb-loading">No scores yet – be the first!</div>'; return; }
+  if (!rows.length) { el.innerHTML = `<div class="lb-loading">No ${isCasual?'casual':'normal'} scores yet!</div>`; return; }
   const rankSymbols = ['🥇','🥈','🥉'];
   const rankClasses = ['gold','silver','bronze'];
   el.innerHTML = rows.map((r, i) => {
@@ -475,7 +511,7 @@ function renderLeaderboard(rows) {
         <span class="lb-rank ${rankCls}">${rankLabel}</span>
         ${avatarEl}
         <span class="lb-name">${escHtml(r.username || 'Unknown')}${isMe ? ' 👈' : ''}</span>
-        <span class="lb-score">${r.score.toLocaleString()}</span>
+        <span class="lb-score">${r.score.toLocaleString()}${isCasual?' 🎤':''}</span>
       </div>`;
   }).join('');
 }
@@ -484,12 +520,37 @@ function escHtml(s) {
   return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 }
 let currentTab = 'live';
+
+async function setMode(mode) {
+  gameMode = mode;
+  ['Normal','Casual','Stupid'].forEach(m => {
+    document.getElementById('mode'+m).classList.toggle('active', mode===m.toLowerCase());
+  });
+  const needsMic = mode==='casual'||mode==='stupid';
+  if(needsMic) await initMic();
+  else {
+    stopMic();
+    document.getElementById('micStatus').style.display='none';
+  }
+  if(mode==='stupid'){
+    document.getElementById('micStatus').textContent='🤪 SCREAM to JUMP BOOST! Louder = Higher!';
+    document.getElementById('micStatus').style.display='block';
+    document.getElementById('micStatus').style.color='#f472b6';
+  } else if(mode==='casual'){
+    document.getElementById('micStatus').style.color='#a78bfa';
+  }
+}
+
 function showTab(tab) {
   currentTab = tab;
-  document.getElementById('tabLive').classList.toggle('active', tab==='live');
-  document.getElementById('tabAll').classList.toggle('active', tab==='all');
+  ['Live','All','Casual','Stupid'].forEach(t => {
+    const el = document.getElementById('tab'+t[0].toUpperCase()+t.slice(1));
+    if(el) el.classList.toggle('active', tab===t.toLowerCase());
+  });
   if (tab==='live') pollLivePlayers();
-  else loadLeaderboard();
+  else if(tab==='casual') loadLeaderboard('casual');
+  else if(tab==='stupid') loadLeaderboard('stupid');
+  else loadLeaderboard('normal');
 }
 
 function setLbStatus(msg) {
@@ -839,6 +900,39 @@ function drawMonsters(){
   }
 }
 
+function drawMicMeter(){
+  const bx=8, by=H-60, bw=14, bh=50;
+  // Background
+  ctx.fillStyle='rgba(0,0,0,0.4)';
+  roundRect(ctx,bx-2,by-2,bw+4,bh+4,4); ctx.fill();
+  // Track
+  ctx.fillStyle='rgba(255,255,255,0.1)';
+  roundRect(ctx,bx,by,bw,bh,3); ctx.fill();
+  // Volume fill
+  const fillH = bh * micVolume;
+  const SCREAM_T = gameMode==='stupid' ? 0.4 : MIC_HEAL_THRESHOLD;
+  const color = micVolume > SCREAM_T
+    ? (gameMode==='stupid' ? '#f472b6' : (healCooldown>0 ? '#fbbf24' : '#4ade80'))
+    : '#6366f1';
+  ctx.fillStyle=color;
+  roundRect(ctx,bx,by+bh-fillH,bw,fillH,3); ctx.fill();
+  // Threshold line
+  ctx.strokeStyle='#fff';ctx.lineWidth=1.5;ctx.globalAlpha=0.6;
+  const ty=by+bh*(1-SCREAM_T);
+  ctx.beginPath();ctx.moveTo(bx,ty);ctx.lineTo(bx+bw,ty);ctx.stroke();
+  ctx.globalAlpha=1;
+  // Accumulator ring
+  if(micVolume>MIC_HEAL_THRESHOLD&&healCooldown<=0){
+    ctx.strokeStyle='#4ade80';ctx.lineWidth=2;
+    ctx.beginPath();
+    ctx.arc(bx+bw/2,by-12,8,-(Math.PI/2),(-(Math.PI/2))+(Math.PI*2*micHealAccum));
+    ctx.stroke();
+  }
+  // Mic icon
+  ctx.fillStyle='#fff';ctx.font='12px serif';ctx.textAlign='center';ctx.textBaseline='middle';
+  ctx.fillText('🎤',bx+bw/2,by-12);
+}
+
 function drawPfx(){
   for(const p of particles){
     ctx.save();ctx.globalAlpha=p.life;ctx.fillStyle=p.color;
@@ -941,6 +1035,47 @@ function update(dt=1){
   for(const t of floatTexts){t.y+=t.vy*dt;t.life-=0.016*dt;}
   floatTexts=floatTexts.filter(t=>t.life>0).slice(-20);
   if(screenShake>0)screenShake-=dt;
+
+  // ── Mic Effects ──
+  if(gameMode==='casual'||gameMode==='stupid'){
+    updateMic();
+    if(gameMode==='casual'){
+      if(healCooldown>0) healCooldown-=dt;
+      if(micVolume>MIC_HEAL_THRESHOLD && healCooldown<=0){
+        micHealAccum += (micVolume - MIC_HEAL_THRESHOLD) * MIC_HEAL_RATE * dt;
+        if(micHealAccum >= 1){
+          micHealAccum = 0;
+          if(lives < 5){
+            lives++;
+            healCooldown = 180;
+            floatText(player.x+player.w/2, player.y+cameraY-40, '💚 HEAL!', '#4ade80', 22);
+            spawnPfx(player.x+player.w/2, player.y+player.h/2, '#4ade80', 10, 4);
+            beep(600, 0.1, 'sine', 0.1); beep(800, 0.15, 'sine', 0.08);
+          }
+        }
+      } else if(micVolume<=MIC_HEAL_THRESHOLD){
+        micHealAccum = Math.max(0, micHealAccum - 0.01*dt);
+      }
+    } else if(gameMode==='stupid'){
+      // Scream = instant jump boost!
+      const SCREAM_THRESHOLD = 0.4;
+      if(micVolume > SCREAM_THRESHOLD){
+        const boost = JUMP_VEL * (1 + micVolume * 2.5); // louder = higher
+        if(player.vy > boost * 0.5){ // only boost when falling or weak jump
+          player.vy = boost;
+          player.squish = 0.4;
+          spawnPfx(player.x+player.w/2, player.y+player.h, '#f472b6', 3, 3);
+          // Show volume as text
+          if(Math.floor(frameCount)%8===0){
+            const vol = Math.floor(micVolume*100);
+            floatText(player.x+player.w/2, player.y+cameraY-20,
+              vol>80?'😱 AAAA!':vol>60?'😤 YEAH!':'🎤 '+vol+'%',
+              '#f472b6', 14);
+          }
+        }
+      }
+    }
+  }
   for(const m of [100,300,600,1000,2000,5000,10000]){
     if(Math.floor(score)===m&&!window['_ms'+m]){
       window['_ms'+m]=true;
@@ -960,6 +1095,7 @@ function loop(timestamp){
   const sy=screenShake>0?(Math.random()-0.5)*screenShake:0;
   ctx.save();ctx.translate(sx,sy);
   drawBg();drawPlatforms();drawCoins();drawPowerups();drawMonsters();drawPlayer();drawBullets();drawPfx();
+  if(gameMode==='casual'||gameMode==='stupid') drawMicMeter();
   ctx.restore();
   document.getElementById('scoreHud').textContent=Math.floor(score);
   document.getElementById('bestHud').textContent='Best:'+Math.floor(best);
@@ -974,31 +1110,46 @@ async function showGameOver(){
   document.getElementById('finalBest').textContent='🏆 Best Result: '+Math.floor(best);
   document.getElementById('startBtn').textContent='RETRY!';
   document.getElementById('overlay').style.display='flex';
+  if(gameMode==='casual'||gameMode==='stupid') stopMic();
   setLbStatus('Saving score...');
-  await updateLiveScore(score, false); // mark as dead in live session
+  await updateLiveScore(score, false);
   await saveScore(score);
-  await loadLeaderboard();
+  if(gameMode==='casual') showTab('casual');
+  else if(gameMode==='stupid') showTab('stupid');
+  else showTab('all');
   state='menu';
 }
 
 function startGame(){
   initAC();AC.resume();
   score=0;lives=3;cameraY=0;frameCount=0;shootCooldown=0;screenShake=0;
+  micHealAccum=0;healCooldown=0;
   particles=[];floatTexts=[];bullets=[];monsters=[];coins=[];powerups=[];
   shieldActive=false;jetpackActive=false;invincible=0;comboCount=0;comboTimer=0;
   for(const m of [100,300,600,1000,2000,5000,10000])delete window['_ms'+m];
   resetPlayer();generatePlatforms();generateStars();
   player.vy=JUMP_VEL;
   document.getElementById('overlay').style.display='none';
-  showTab('live'); // switch to live race tab
+  showTab('live');
   startLivePolling();
+  if(gameMode==='casual'||gameMode==='stupid') initMic();
   state='playing';
 }
 
 document.getElementById('startBtn').addEventListener('click',startGame);
-document.getElementById('lbRefresh').addEventListener('click',()=>{ if(currentTab==='live') pollLivePlayers(); else loadLeaderboard(); });
+document.getElementById('lbRefresh').addEventListener('click',()=>{
+  if(currentTab==='live') pollLivePlayers();
+  else if(currentTab==='casual') loadLeaderboard('casual');
+  else if(currentTab==='stupid') loadLeaderboard('stupid');
+  else loadLeaderboard('normal');
+});
 document.getElementById('tabLive').addEventListener('click',()=>showTab('live'));
 document.getElementById('tabAll').addEventListener('click',()=>showTab('all'));
+document.getElementById('tabCasual').addEventListener('click',()=>showTab('casual'));
+document.getElementById('tabStupid').addEventListener('click',()=>showTab('stupid'));
+document.getElementById('modeNormal').addEventListener('click',()=>setMode('normal'));
+document.getElementById('modeCasual').addEventListener('click',()=>setMode('casual'));
+document.getElementById('modeStupid').addEventListener('click',()=>setMode('stupid'));
 window.addEventListener('keydown',e=>{
   if(!keys[e.key]) keys[e.key]=1; else keys[e.key]=2;
   if(state==='menu'&&(e.key===' '||e.key==='Enter'))startGame();
