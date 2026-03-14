@@ -331,13 +331,13 @@ async function updateLiveScore(currentScore, alive = true) {
 
 async function pollLivePlayers() {
   if (!discordUser) return;
+  if (currentTab !== 'live') return; // don't overwrite other tabs!
   try {
     const res = await fetch(
       `${SUPABASE_URL}/rest/v1/live_sessions?channel_id=eq.${discordChannelId}&select=username,avatar,score,alive,user_id,updated_at&order=score.desc`,
       { headers: { 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}` } }
     );
     const players = await res.json();
-    // Filter out stale players (inactive > 30 seconds)
     const now = Date.now();
     const active = players.filter(p => now - new Date(p.updated_at).getTime() < 30000);
     renderLiveRace(active);
@@ -375,7 +375,7 @@ function startLivePolling() {
   livePollingInterval = setInterval(async () => {
     if (state === 'playing') {
       await updateLiveScore(score, true);
-      await pollLivePlayers(); // always update live during game
+      if (currentTab === 'live') await pollLivePlayers();
     } else if (currentTab === 'live') {
       await pollLivePlayers();
     }
