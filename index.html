@@ -300,7 +300,7 @@ let shieldActive=false,shieldTimer=0;
 let jetpackActive=false,jetpackTimer=0;
 let invincible=0, screenShake=0, shootCooldown=0;
 
-const GRAVITY=0.04, JUMP_VEL=-3.5, SPRING_VEL=-7.5, JETPACK_VEL=-5.5, SPEED=2.0;
+const GRAVITY=0.11, JUMP_VEL=-7.0, SPRING_VEL=-13.0, JETPACK_VEL=-10.0, SPEED=3.8;
 const SCROLL_TRIGGER=H*0.42;
 
 let player={};
@@ -348,7 +348,7 @@ function spawnPowerup(x,y){
 function spawnMonster(y){
   monsters.push({
     x:Math.random()*(W-32),y,w:32,h:30,
-    vx:(Math.random()<0.5?0.7:-0.7)*(0.8+Math.random()*0.5),
+    vx:(Math.random()<0.5?2.5:-2.5)*(0.8+Math.random()*0.5),
     vy:0,face:1,dead:false,deadAnim:0,
     anim:Math.random()*Math.PI*2,
     type:Math.random()<0.35?'flyer':'walker'
@@ -356,7 +356,7 @@ function spawnMonster(y){
 }
 function shoot(){
   if(shootCooldown>0) return;
-  shootCooldown=90; sndShoot();
+  shootCooldown=35; sndShoot();
   bullets.push({x:player.x+player.w/2,y:player.y-4,vy:-8,life:1});
 }
 function floatText(x,y,txt,color='#c9aaff',size=18){
@@ -602,11 +602,11 @@ function update(dt=1){
   frameCount++;
   const goLeft=keys['ArrowLeft']||keys['a']||keys['A']||mLeft;
   const goRight=keys['ArrowRight']||keys['d']||keys['D']||mRight;
-  const doShoot=keys[' ']||keys['ArrowUp']||keys['w']||keys['W']||mShoot;
+  const doShoot=keys[' ']===1||keys['ArrowUp']===1||keys['w']===1||keys['W']===1||mShoot;
   if(goLeft){player.vx=-SPEED;player.face=-1;}
   else if(goRight){player.vx=SPEED;player.face=1;}
   else player.vx*=Math.pow(0.85,dt);
-  if(doShoot) shoot();
+  if(doShoot){ shoot(); if(keys[' '])keys[' ']=2; if(keys['ArrowUp'])keys['ArrowUp']=2; if(keys['w'])keys['w']=2; if(keys['W'])keys['W']=2; }
   if(shootCooldown>0) shootCooldown-=dt;
   if(jetpackActive){jetpackTimer-=dt;player.vy+=(JETPACK_VEL-player.vy)*0.07*dt;spawnPfx(player.x+player.w/2,player.y+player.h,'#7c3aed',1,2);if(jetpackTimer<=0)jetpackActive=false;}
   else player.vy+=GRAVITY*dt;
@@ -698,7 +698,7 @@ function update(dt=1){
 
 // ── Game loop mit Delta-Time ────────────────────────────
 function loop(timestamp){
-  const dt = Math.min((timestamp - (loop.last||timestamp)) / (1000/60), 2.5);
+  const dt = Math.min((timestamp - (loop.last||timestamp)) / (1000/60), 1.5);
   loop.last = timestamp;
   update(dt);
   const sx=screenShake>0?(Math.random()-0.5)*screenShake:0;
@@ -750,7 +750,7 @@ function startGame(){
 
 document.getElementById('startBtn').addEventListener('click',startGame);
 window.addEventListener('keydown',e=>{
-  keys[e.key]=true;
+  if(!keys[e.key]) keys[e.key]=1; else keys[e.key]=2;
   if(state==='menu'&&(e.key===' '||e.key==='Enter'))startGame();
   if(e.key===' '||e.key==='ArrowUp')e.preventDefault();
 });
