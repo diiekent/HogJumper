@@ -24,8 +24,6 @@
     box-shadow:0 0 24px rgba(124,58,237,0.5), 0 8px 32px rgba(0,0,0,0.6), inset 0 0 0 2px #a78bfa;
   }
   canvas { display:block; background:#1e1033; }
-
-  /* ── Overlay ── */
   #overlay {
     position:absolute; inset:0; display:flex; flex-direction:column; align-items:center;
     justify-content:center; background:rgba(20,10,40,0.95); backdrop-filter:blur(3px);
@@ -43,8 +41,6 @@
   #startBtn:hover { transform:translateY(-2px); box-shadow:0 6px 0 #3541a0, 0 0 28px rgba(88,101,242,0.7); }
   #startBtn:active { transform:translateY(2px); box-shadow:0 2px 0 #3541a0; }
   #controls { font-size:0.78rem; color:#8b7aa0; text-align:center; line-height:1.7; }
-
-  /* ── Leaderboard ── */
   #leaderboard {
     width: 100%; max-height: 200px; overflow-y: auto;
     background: rgba(124,58,237,0.12); border: 1px solid rgba(124,58,237,0.3);
@@ -81,16 +77,12 @@
   .lb-score { font-family:'Schoolbell',cursive; color:#c9aaff; flex-shrink:0; }
   .lb-loading { text-align:center; color:#7c3aed; font-size:0.85rem; padding:10px; }
   #lbStatus { font-size:0.72rem; color:#6d5a8a; text-align:center; min-height:14px; }
-
-  /* ── HUD ── */
   #hud {
     position:absolute; top:10px; left:0; right:0;
     display:flex; justify-content:space-between; padding:0 12px;
     pointer-events:none; z-index:5;
   }
   .hud-item { font-family:'Schoolbell',cursive; font-size:1.1rem; color:#c9aaff; text-shadow:0 0 8px #7c3aed; }
-
-  /* ── Mobile controls ── */
   #mobileControls { display:none; gap:16px; margin-top:4px; align-items:center; }
   .mBtn {
     width:60px; height:60px; background:rgba(88,101,242,0.2); border:3px solid #7c3aed;
@@ -117,14 +109,11 @@
       <h2>HogJumper</h2>
       <div class="score-display" id="finalScore"></div>
       <div class="best-display"  id="finalBest"></div>
-
-      <!-- Leaderboard (hidden on first visit, shown after game) -->
       <div id="leaderboardSection" style="width:100%;display:none;">
         <div id="lbTitle">🏆 Top Scores</div>
         <div id="leaderboard"><div class="lb-loading">Loading...</div></div>
         <div id="lbStatus"></div>
       </div>
-
       <button id="startBtn">START!</button>
       <div id="controls">
         ← → / A D &nbsp;·&nbsp; Move<br>
@@ -142,25 +131,19 @@
 </div>
 
 <script type="module">
-// ══════════════════════════════════════════════════════
-//  ⚙️  CONFIG – replace these with your actual values!
-// ══════════════════════════════════════════════════════
 const SUPABASE_URL = '/.proxy/supabase';
 const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImV4a2RsaG1na3NvcHBweGxhcXByIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM0MzE0NjIsImV4cCI6MjA4OTAwNzQ2Mn0.Th9-0cCdJ8YgZcN9HU9GLBoQddR8O7I8fzVUeC3q9hA';
 const DISCORD_CLIENT_ID = '1481762798210908301';
-// ══════════════════════════════════════════════════════
 
-// ── Discord SDK ────────────────────────────────────────
 import { DiscordSDK } from 'https://cdn.jsdelivr.net/npm/@discord/embedded-app-sdk@1.2.0/+esm';
 
-let discordUser = null; // { id, username, avatar }
+let discordUser = null;
 let discordReady = false;
 
 async function initDiscord() {
   try {
     const sdk = new DiscordSDK(DISCORD_CLIENT_ID);
     await sdk.ready();
-
     const { code } = await sdk.commands.authorize({
       client_id: DISCORD_CLIENT_ID,
       response_type: 'code',
@@ -168,15 +151,11 @@ async function initDiscord() {
       prompt: 'none',
       scope: ['identify'],
     });
-
-    // Exchange code for token via your backend OR use the direct approach:
-    // For testing without a backend, we fall back to a guest name
     const tokenRes = await fetch('/.netlify/functions/token', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ code }),
     }).catch(() => null);
-
     if (tokenRes?.ok) {
       const { access_token } = await tokenRes.json();
       await sdk.commands.authenticate({ access_token });
@@ -191,13 +170,11 @@ async function initDiscord() {
           : null,
       };
     } else {
-      // Fallback: guest user (works without backend)
       discordUser = { id: 'guest_' + Math.random().toString(36).slice(2), username: 'Guest', avatar: null };
     }
     discordReady = true;
     setLbStatus('Logged in as ' + discordUser.username);
   } catch (e) {
-    // Not running in Discord – use anonymous fallback
     discordUser = { id: 'anon_' + Math.random().toString(36).slice(2), username: 'Anonymous', avatar: null };
     discordReady = true;
     setLbStatus('Playing as Anonymous');
@@ -205,7 +182,6 @@ async function initDiscord() {
 }
 initDiscord();
 
-// ── Supabase helpers ───────────────────────────────────
 async function saveScore(scoreVal) {
   if (!discordUser) return;
   const newScore = Math.floor(scoreVal);
@@ -287,14 +263,10 @@ function setLbStatus(msg) {
   if (el) el.textContent = msg;
 }
 
-// ══════════════════════════════════════════════════════
-//  GAME CODE
-// ══════════════════════════════════════════════════════
 const canvas = document.getElementById('canvas');
 const ctx    = canvas.getContext('2d');
 const W = canvas.width, H = canvas.height;
 
-// ── Audio ──────────────────────────────────────────────
 let AC;
 function initAC(){ if(!AC) AC=new(window.AudioContext||window.webkitAudioContext)(); }
 function beep(freq,dur,type='sine',vol=0.12){
@@ -316,7 +288,6 @@ function sndSpring() { beep(480,0.05,'sine',0.09);setTimeout(()=>beep(780,0.1,'s
 function sndDead()   { [200,175,150,125].forEach((f,i)=>setTimeout(()=>beep(f,0.15,'sawtooth',0.1),i*90)); }
 function sndPowerup(){ [400,600,800,1000].forEach((f,i)=>setTimeout(()=>beep(f,0.08,'sine',0.1),i*55)); }
 
-// ── Game state ─────────────────────────────────────────
 let state='menu';
 let score=0,best=0,lives=3;
 let cameraY=0;
@@ -329,17 +300,14 @@ let shieldActive=false,shieldTimer=0;
 let jetpackActive=false,jetpackTimer=0;
 let invincible=0, screenShake=0, shootCooldown=0;
 
-// ── Physics ────────────────────────────────────────────
 const GRAVITY=0.04, JUMP_VEL=-3.5, SPRING_VEL=-7.5, JETPACK_VEL=-5.5, SPEED=2.0;
 const SCROLL_TRIGGER=H*0.42;
 
-// ── Player ─────────────────────────────────────────────
 let player={};
 function resetPlayer(){
   player={x:W/2-20,y:H-120,w:42,h:48,vx:0,vy:0,face:1,squish:1,dead:false};
 }
 
-// ── Platform types ─────────────────────────────────────
 const PT={N:'n',M:'m',B:'b',S:'s',T:'t'};
 let platforms=[];
 const PW=62,PH=14;
@@ -415,7 +383,6 @@ function roundRect(c,x,y,w,h,r){
   c.lineTo(x,y+r);c.quadraticCurveTo(x,y,x+r,y);c.closePath();
 }
 
-// ── Draw ───────────────────────────────────────────────
 function drawBg(){
   const grad=ctx.createLinearGradient(0,0,0,H);
   grad.addColorStop(0,'#0d0620');grad.addColorStop(1,'#1a0d35');
@@ -629,8 +596,8 @@ function drawPfx(){
   }
 }
 
-// ── Update ─────────────────────────────────────────────
-function update(){
+// ── Update mit Delta-Time (fix für 144Hz+) ─────────────
+function update(dt=1){
   if(state!=='playing') return;
   frameCount++;
   const goLeft=keys['ArrowLeft']||keys['a']||keys['A']||mLeft;
@@ -638,22 +605,22 @@ function update(){
   const doShoot=keys[' ']||keys['ArrowUp']||keys['w']||keys['W']||mShoot;
   if(goLeft){player.vx=-SPEED;player.face=-1;}
   else if(goRight){player.vx=SPEED;player.face=1;}
-  else player.vx*=0.85;
+  else player.vx*=Math.pow(0.85,dt);
   if(doShoot) shoot();
-  if(shootCooldown>0) shootCooldown--;
-  if(jetpackActive){jetpackTimer--;player.vy+=(JETPACK_VEL-player.vy)*0.07;spawnPfx(player.x+player.w/2,player.y+player.h,'#7c3aed',1,2);if(jetpackTimer<=0)jetpackActive=false;}
-  else player.vy+=GRAVITY;
-  if(shieldActive){shieldTimer--;if(shieldTimer<=0)shieldActive=false;}
-  if(invincible>0) invincible--;
-  player.x+=player.vx;player.y+=player.vy;player.squish+=(1-player.squish)*0.18;
+  if(shootCooldown>0) shootCooldown-=dt;
+  if(jetpackActive){jetpackTimer-=dt;player.vy+=(JETPACK_VEL-player.vy)*0.07*dt;spawnPfx(player.x+player.w/2,player.y+player.h,'#7c3aed',1,2);if(jetpackTimer<=0)jetpackActive=false;}
+  else player.vy+=GRAVITY*dt;
+  if(shieldActive){shieldTimer-=dt;if(shieldTimer<=0)shieldActive=false;}
+  if(invincible>0) invincible-=dt;
+  player.x+=player.vx*dt;player.y+=player.vy*dt;player.squish+=(1-player.squish)*0.18*dt;
   if(player.x+player.w<0)player.x=W;if(player.x>W)player.x=-player.w;
   const psy=player.y-cameraY;
   if(psy<SCROLL_TRIGGER){const d=SCROLL_TRIGGER-psy;cameraY-=d;score+=d*0.05;if(score>best)best=score;}
-  if(comboTimer>0){comboTimer--;if(comboTimer===0)comboCount=0;}
+  if(comboTimer>0){comboTimer-=dt;if(comboTimer<=0)comboCount=0;}
   if(player.vy>0&&!jetpackActive){
     for(const p of platforms){
       if(p.broken) continue;
-      const px=player.x+5,pw=player.w-10,pb=player.y+player.h,ppb=pb-player.vy;
+      const px=player.x+5,pw=player.w-10,pb=player.y+player.h,ppb=pb-player.vy*dt;
       if(px+pw>p.x&&px<p.x+p.w&&ppb<=p.y+4&&pb>=p.y&&pb<=p.y+p.h+10){
         if(p.type===PT.B){p.broken=true;spawnPfx(p.x+p.w/2,p.y,'#ef4444',8);player.vy=JUMP_VEL;player.squish=0.6;sndJump();}
         else if(p.type===PT.S){player.vy=SPRING_VEL;p.springActive=true;p.springAnim=1;player.squish=0.45;sndSpring();spawnPfx(p.x+p.w/2,p.y,'#a78bfa',7);floatText(p.x+p.w/2,p.y+cameraY-32,'BOING! ✨','#c4b5fd',16);}
@@ -664,25 +631,25 @@ function update(){
     }
   }
   for(const p of platforms){
-    if(p.type===PT.M){p.x+=p.dir*p.speed;if(p.x<=10||p.x+p.w>=W-10)p.dir*=-1;}
-    if(p.type===PT.B&&p.broken)p.breakAnim=Math.min(p.breakAnim+0.04,1);
-    if(p.springAnim>0)p.springAnim-=0.05;if(p.springAnim<=0)p.springActive=false;
+    if(p.type===PT.M){p.x+=p.dir*p.speed*dt;if(p.x<=10||p.x+p.w>=W-10)p.dir*=-1;}
+    if(p.type===PT.B&&p.broken)p.breakAnim=Math.min(p.breakAnim+0.04*dt,1);
+    if(p.springAnim>0)p.springAnim-=0.05*dt;if(p.springAnim<=0)p.springActive=false;
   }
   platforms=platforms.filter(p=>p.y-cameraY<H+60);
   while(platforms.length<20)spawnPlatformAbove();
-  for(const b of bullets)b.y+=b.vy;
+  for(const b of bullets)b.y+=b.vy*dt;
   for(const b of bullets){
     if(b.life===0)continue;
     for(const m of monsters){if(m.dead)continue;if(Math.abs(b.x-(m.x+m.w/2))<m.w/2+5&&Math.abs(b.y-(m.y+m.h/2))<m.h/2+7){m.dead=true;b.life=0;score+=50;spawnPfx(m.x+m.w/2,m.y+m.h/2,'#a78bfa',12);floatText(m.x+m.w/2,m.y+cameraY-22,'+50!','#c4b5fd',20);screenShake=7;}}
   }
-  bullets=bullets.filter(b=>b.life>0&&b.y-cameraY>-40);
+  bullets=bullets.filter(b=>b.life>0&&b.y-cameraY>-40).slice(-20);
   const diff=Math.min(score/4000,1);
-  if(Math.random()<0.0025+diff*0.004){const topY=platforms.reduce((a,b)=>a.y<b.y?a:b).y;spawnMonster(topY-30-Math.random()*220);}
+  if(Math.random()<(0.0025+diff*0.004)*dt){const topY=platforms.reduce((a,b)=>a.y<b.y?a:b).y;spawnMonster(topY-30-Math.random()*220);}
   for(const m of monsters){
-    if(m.dead){m.deadAnim=Math.min(m.deadAnim+0.04,1);continue;}
-    m.anim+=0.07;
-    if(m.type==='flyer'){m.x+=m.vx;m.y+=Math.sin(m.anim)*0.4;}
-    else{m.x+=m.vx;m.vy+=0.07;m.y+=m.vy;for(const p of platforms){if(!p.broken&&m.x+m.w>p.x&&m.x<p.x+p.w&&m.y+m.h>=p.y&&m.y+m.h<=p.y+p.h+8)m.vy=-1.5;}}
+    if(m.dead){m.deadAnim=Math.min(m.deadAnim+0.04*dt,1);continue;}
+    m.anim+=0.07*dt;
+    if(m.type==='flyer'){m.x+=m.vx*dt;m.y+=Math.sin(m.anim)*0.4;}
+    else{m.x+=m.vx*dt;m.vy+=0.07*dt;m.y+=m.vy*dt;for(const p of platforms){if(!p.broken&&m.x+m.w>p.x&&m.x<p.x+p.w&&m.y+m.h>=p.y&&m.y+m.h<=p.y+p.h+8)m.vy=-1.5;}}
     if(m.x<0||m.x+m.w>W)m.vx*=-1;m.x=Math.max(0,Math.min(W-m.w,m.x));m.face=m.vx>0?1:-1;
     if(invincible===0&&!shieldActive){
       if(Math.abs(player.x+player.w/2-(m.x+m.w/2))<(player.w+m.w)/2-8&&Math.abs(player.y+player.h/2-(m.y+m.h/2))<(player.h+m.h)/2-8){
@@ -697,28 +664,28 @@ function update(){
       }
     }
   }
-  monsters=monsters.filter(m=>!(m.dead&&m.deadAnim>=1)&&m.y-cameraY<H+120);
+  monsters=monsters.filter(m=>!(m.dead&&m.deadAnim>=1)&&m.y-cameraY<H+120).slice(-15);
   for(const c of coins){
-    c.anim+=0.06;if(c.collected)continue;
+    c.anim+=0.06*dt;if(c.collected)continue;
     if(Math.abs(player.x+player.w/2-c.x)<c.r+player.w/2-4&&Math.abs(player.y+player.h/2-c.y)<c.r+player.h/2){
       c.collected=true;score+=10;sndCoin();spawnPfx(c.x,c.y,'#a78bfa',6);floatText(c.x,c.y+cameraY-16,'+10','#c4b5fd',15);
     }
   }
-  coins=coins.filter(c=>!c.collected&&c.y-cameraY<H+40);
+  coins=coins.filter(c=>!c.collected&&c.y-cameraY<H+40).slice(-30);
   for(const p of powerups){
-    p.anim+=0.05;if(p.collected)continue;
+    p.anim+=0.05*dt;if(p.collected)continue;
     if(Math.abs(player.x+player.w/2-p.x)<player.w/2+14&&Math.abs(player.y+player.h/2-p.y)<player.h/2+20){
       p.collected=true;sndPowerup();spawnPfx(p.x,p.y,'#a78bfa',10);
       if(p.type===PU.J){jetpackActive=true;jetpackTimer=200;floatText(p.x,p.y+cameraY-22,'🚀 JETPACK!','#ec4899',18);}
       else{shieldActive=true;shieldTimer=320;floatText(p.x,p.y+cameraY-22,'🛡️ SHIELD!','#5865f2',18);}
     }
   }
-  powerups=powerups.filter(p=>!p.collected&&p.y-cameraY<H+40);
-  for(const p of particles){p.x+=p.vx;p.y+=p.vy;p.vy+=0.08;p.life-=p.decay;}
-  particles=particles.filter(p=>p.life>0);
-  for(const t of floatTexts){t.y+=t.vy;t.life-=0.016;}
-  floatTexts=floatTexts.filter(t=>t.life>0);
-  if(screenShake>0)screenShake--;
+  powerups=powerups.filter(p=>!p.collected&&p.y-cameraY<H+40).slice(-10);
+  for(const p of particles){p.x+=p.vx*dt;p.y+=p.vy*dt;p.vy+=0.08*dt;p.life-=p.decay*dt;}
+  particles=particles.filter(p=>p.life>0).slice(-150);
+  for(const t of floatTexts){t.y+=t.vy*dt;t.life-=0.016*dt;}
+  floatTexts=floatTexts.filter(t=>t.life>0).slice(-20);
+  if(screenShake>0)screenShake-=dt;
   for(const m of [100,300,600,1000,2000,5000,10000]){
     if(Math.floor(score)===m&&!window['_ms'+m]){
       window['_ms'+m]=true;
@@ -729,9 +696,11 @@ function update(){
   if(player.y-cameraY>H+70){state='dead';setTimeout(showGameOver,400);sndDead();}
 }
 
-// ── Game loop ──────────────────────────────────────────
-function loop(){
-  update();
+// ── Game loop mit Delta-Time ────────────────────────────
+function loop(timestamp){
+  const dt = Math.min((timestamp - (loop.last||timestamp)) / (1000/60), 2.5);
+  loop.last = timestamp;
+  update(dt);
   const sx=screenShake>0?(Math.random()-0.5)*screenShake:0;
   const sy=screenShake>0?(Math.random()-0.5)*screenShake:0;
   ctx.save();ctx.translate(sx,sy);
@@ -745,7 +714,8 @@ function loop(){
   requestAnimationFrame(loop);
 }
 
-// ── Show game over → save score → load leaderboard ─────
+let lbRefreshInterval = null;
+
 async function showGameOver(){
   document.getElementById('finalScore').textContent='⭐ Score: '+Math.floor(score);
   document.getElementById('finalBest').textContent='🏆 Best Result: '+Math.floor(best);
@@ -754,15 +724,19 @@ async function showGameOver(){
   document.getElementById('leaderboardSection').style.display='block';
   document.getElementById('overlay').style.display='flex';
   setLbStatus('Saving score...');
-
-  await saveScore(score);   // ← save to Supabase
-  await loadLeaderboard();  // ← load & render top 10
-
+  await saveScore(score);
+  await loadLeaderboard();
   state='menu';
+  // Auto-refresh leaderboard every 10 seconds
+  if(lbRefreshInterval) clearInterval(lbRefreshInterval);
+  lbRefreshInterval = setInterval(()=>{
+    if(state==='menu') loadLeaderboard();
+    else clearInterval(lbRefreshInterval);
+  }, 10000);
 }
 
-// ── Start game ─────────────────────────────────────────
 function startGame(){
+  if(lbRefreshInterval){ clearInterval(lbRefreshInterval); lbRefreshInterval=null; }
   initAC();AC.resume();
   score=0;lives=3;cameraY=0;frameCount=0;shootCooldown=0;screenShake=0;
   particles=[];floatTexts=[];bullets=[];monsters=[];coins=[];powerups=[];
