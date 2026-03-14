@@ -256,18 +256,27 @@ const MIC_HEAL_RATE = 0.006;
 
 async function initMic() {
   try {
+    // Stop any existing stream first
+    stopMic();
+    // Use existing AudioContext or create new one
+    initAC(); // reuse game's AC
     micStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
-    const micAC = new AudioContext();
-    const source = micAC.createMediaStreamSource(micStream);
-    micAnalyser = micAC.createAnalyser();
-    micAnalyser.fftSize = 256;
+    await AC.resume();
+    const source = AC.createMediaStreamSource(micStream);
+    micAnalyser = AC.createAnalyser();
+    micAnalyser.fftSize = 512;
+    micAnalyser.smoothingTimeConstant = 0.6;
     source.connect(micAnalyser);
     micData = new Uint8Array(micAnalyser.frequencyBinCount);
-    document.getElementById('micStatus').textContent = '🎤 Mic active – scream to heal!';
+    const msg = gameMode==='stupid'
+      ? '🤪 Mic active – SCREAM TO JUMP!'
+      : '🎤 Mic active – scream to heal!';
+    document.getElementById('micStatus').textContent = msg;
     document.getElementById('micStatus').style.display = 'block';
     return true;
   } catch(e) {
-    document.getElementById('micStatus').textContent = '🎤 No mic access – healing disabled';
+    console.warn('Mic error:', e);
+    document.getElementById('micStatus').textContent = '🎤 Mic blocked – try allowing mic access';
     document.getElementById('micStatus').style.display = 'block';
     return false;
   }
@@ -522,6 +531,7 @@ function escHtml(s) {
 let currentTab = 'live';
 
 async function setMode(mode) {
+  if(state==='playing') return; // can't change mode mid-game!
   gameMode = mode;
   ['Normal','Casual','Stupid'].forEach(m => {
     document.getElementById('mode'+m).classList.toggle('active', mode===m.toLowerCase());
@@ -539,6 +549,15 @@ async function setMode(mode) {
   } else if(mode==='casual'){
     document.getElementById('micStatus').style.color='#a78bfa';
   }
+}
+
+function setModeBtnsDisabled(disabled) {
+  ['modeNormal','modeCasual','modeStupid'].forEach(id => {
+    const el = document.getElementById(id);
+    el.disabled = disabled;
+    el.style.opacity = disabled ? '0.4' : '1';
+    el.style.cursor = disabled ? 'not-allowed' : 'pointer';
+  });
 }
 
 function showTab(tab) {
@@ -1110,6 +1129,7 @@ async function showGameOver(){
   document.getElementById('finalBest').textContent='🏆 Best Result: '+Math.floor(best);
   document.getElementById('startBtn').textContent='RETRY!';
   document.getElementById('overlay').style.display='flex';
+  setModeBtnsDisabled(false); // unlock mode selection
   if(gameMode==='casual'||gameMode==='stupid') stopMic();
   setLbStatus('Saving score...');
   await updateLiveScore(score, false);
@@ -1130,6 +1150,7 @@ function startGame(){
   resetPlayer();generatePlatforms();generateStars();
   player.vy=JUMP_VEL;
   document.getElementById('overlay').style.display='none';
+  setModeBtnsDisabled(true); // lock mode during game
   showTab('live');
   startLivePolling();
   if(gameMode==='casual'||gameMode==='stupid') initMic();
