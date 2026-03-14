@@ -227,11 +227,64 @@
 </div>
 
 <script type="module">
-const SUPABASE_URL = '/.proxy/supabase';
+const SUPABASE_DIRECT = 'https://exkdlhmgksopppxlaqpr.supabase.co';
+const SUPABASE_PROXY  = '/.proxy/supabase';
+// Use proxy inside Discord Activity, direct URL otherwise
+const SUPABASE_URL = window.location.hostname.includes('discordsays.com') || window.location.hostname.includes('discord.com')
+  ? SUPABASE_PROXY
+  : SUPABASE_DIRECT;
 const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImV4a2RsaG1na3NvcHBweGxhcXByIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM0MzE0NjIsImV4cCI6MjA4OTAwNzQ2Mn0.Th9-0cCdJ8YgZcN9HU9GLBoQddR8O7I8fzVUeC3q9hA';
 const DISCORD_CLIENT_ID = '1481762798210908301';
 
+import { DiscordSDK } from 'https://cdn.jsdelivr.net/npm/@discord/embedded-app-sdk@1.2.0/+esm';
 
+let discordUser = null;
+let discordChannelId = 'local';
+
+async function initDiscord() {
+  try {
+    const sdk = new DiscordSDK(DISCORD_CLIENT_ID);
+    await sdk.ready();
+    try {
+      const info = await sdk.commands.getInstanceConnectedParticipants();
+      if (info?.channel_id) discordChannelId = info.channel_id;
+      else discordChannelId = sdk.instanceId || 'local';
+    } catch(e) { discordChannelId = sdk.instanceId || 'local'; }
+
+    const { code } = await sdk.commands.authorize({
+      client_id: DISCORD_CLIENT_ID,
+      response_type: 'code',
+      state: '', prompt: 'none',
+      scope: ['identify'],
+    });
+    const tokenRes = await fetch('/.netlify/functions/token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ code }),
+    }).catch(() => null);
+    if (tokenRes?.ok) {
+      const { access_token } = await tokenRes.json();
+      await sdk.commands.authenticate({ access_token });
+      const userData = await fetch('https://discord.com/api/users/@me', {
+        headers: { Authorization: `Bearer ${access_token}` },
+      }).then(r => r.json());
+      discordUser = {
+        id: userData.id,
+        username: userData.username,
+        avatar: userData.avatar
+          ? `https://cdn.discordapp.com/avatars/${userData.id}/${userData.avatar}.png?size=64`
+          : null,
+      };
+    } else {
+      discordUser = { id: 'guest_' + Math.random().toString(36).slice(2), username: 'Guest', avatar: null };
+    }
+    setLbStatus('Logged in as ' + discordUser.username);
+  } catch(e) {
+    discordUser = { id: 'anon_' + Math.random().toString(36).slice(2), username: 'Anonymous', avatar: null };
+    setLbStatus('Playing as Anonymous');
+  }
+}
+initDiscord();
 
 // ── Live Multiplayer Session ───────────────────────────
 let livePollingInterval = null;
@@ -375,11 +428,14 @@ async function loadLeaderboard() {
       `${SUPABASE_URL}/rest/v1/scores?select=username,avatar,score,user_id&order=score.desc&limit=10`,
       { headers: { 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}` } }
     );
-    if (!res.ok) throw new Error('fetch failed');
+    if (!res.ok) {
+      const errText = await res.text();
+      throw new Error(`${res.status}: ${errText.slice(0,80)}`);
+    }
     const rows = await res.json();
     renderLeaderboard(rows);
   } catch(e) {
-    el.innerHTML = '<div class="lb-loading" style="color:#ef4444">Could not load scores.</div>';
+    el.innerHTML = `<div class="lb-loading" style="color:#ef4444">Error: ${e.message}</div>`;
   }
 }
 
