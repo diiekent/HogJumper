@@ -151,6 +151,15 @@
   }
   #lbRefresh:hover { background:rgba(124,58,237,0.2); color:#c4b5fd; }
   #lbSaveStatus { font-size:0.68rem; color:#6d5a8a; text-align:center; min-height:12px; }
+  .tab-btn {
+    flex:1; font-family:'Patrick Hand',cursive; font-size:0.75rem; color:#8b7aa0;
+    background:rgba(88,101,242,0.1); border:1px solid rgba(124,58,237,0.25);
+    border-radius:8px; padding:5px 4px; cursor:pointer; transition:all .15s;
+  }
+  .tab-btn.active { background:rgba(124,58,237,0.35); border-color:#7c3aed; color:#c9aaff; }
+  .tab-btn:hover:not(.active) { background:rgba(124,58,237,0.2); color:#a78bfa; }
+  .live-indicator { display:inline-block; width:6px; height:6px; border-radius:50%; background:#4ade80; margin-right:4px; animation: pulse 1.2s infinite; }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.3} }
 </style>
 </head>
 <body>
@@ -208,9 +217,12 @@
     </div>
   </div>
 
-  <!-- RIGHT PANEL – leaderboard -->
+  <!-- RIGHT PANEL – live race + leaderboard -->
   <div class="panel" id="rightPanel">
-    <div class="panel-title">🏆 Leaderboard</div>
+    <div style="display:flex;gap:6px;margin-bottom:2px">
+      <button class="tab-btn active" id="tabLive" onclick="showTab('live')">⚡ Live Race</button>
+      <button class="tab-btn" id="tabAll" onclick="showTab('all')">🏆 All-Time</button>
+    </div>
     <div id="leaderboard"><div class="lb-loading">Loading...</div></div>
     <div id="lbSaveStatus"></div>
     <button id="lbRefresh">↻ Refresh</button>
@@ -226,11 +238,22 @@ import { DiscordSDK } from 'https://cdn.jsdelivr.net/npm/@discord/embedded-app-s
 
 let discordUser = null;
 let discordReady = false;
+let discordChannelId = 'local'; // fallback if not in Discord
 
 async function initDiscord() {
   try {
     const sdk = new DiscordSDK(DISCORD_CLIENT_ID);
     await sdk.ready();
+
+    // Get channel ID for multiplayer grouping
+    try {
+      const { channel_id } = await sdk.commands.getInstanceConnectedParticipants();
+      if (channel_id) discordChannelId = channel_id;
+    } catch(e) {
+      // fallback: use instance ID
+      discordChannelId = sdk.instanceId || 'local';
+    }
+
     const { code } = await sdk.commands.authorize({
       client_id: DISCORD_CLIENT_ID,
       response_type: 'code',
@@ -268,6 +291,106 @@ async function initDiscord() {
   }
 }
 initDiscord();
+
+// ── Live Multiplayer Session ───────────────────────────
+let livePollingInterval = null;
+
+const SB_HEADERS = {
+  'apikey': SUPABASE_KEY,
+  'Authorization': `Bearer ${SUPABASE_KEY}`,
+  'Content-Type': 'application/json',
+};
+
+async function joinLiveSession() {
+  if (!discordUser) return;
+  try {
+    await fetch(`${SUPABASE_URL}/rest/v1/live_sessions`, {
+      method: 'POST',
+      headers: { ...SB_HEADERS, 'Prefer': 'resolution=merge-duplicates,return=minimal' },
+      body: JSON.stringify({
+        channel_id: discordChannelId,
+        user_id: discordUser.id,
+        username: discordUser.username,
+        avatar: discordUser.avatar,
+        score: 0,
+        alive: true,
+        updated_at: new Date().toISOString(),
+      }),
+    });
+  } catch(e) {}
+}
+
+async function updateLiveScore(currentScore, alive = true) {
+  if (!discordUser) return;
+  try {
+    await fetch(`${SUPABASE_URL}/rest/v1/live_sessions?channel_id=eq.${discordChannelId}&user_id=eq.${discordUser.id}`, {
+      method: 'PATCH',
+      headers: { ...SB_HEADERS, 'Prefer': 'return=minimal' },
+      body: JSON.stringify({
+        score: Math.floor(currentScore),
+        alive,
+        updated_at: new Date().toISOString(),
+      }),
+    });
+  } catch(e) {}
+}
+
+async function pollLivePlayers() {
+  if (!discordUser) return;
+  try {
+    const res = await fetch(
+      `${SUPABASE_URL}/rest/v1/live_sessions?channel_id=eq.${discordChannelId}&select=username,avatar,score,alive,user_id,updated_at&order=score.desc`,
+      { headers: { 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}` } }
+    );
+    const players = await res.json();
+    // Filter out stale players (inactive > 30 seconds)
+    const now = Date.now();
+    const active = players.filter(p => now - new Date(p.updated_at).getTime() < 30000);
+    renderLiveRace(active);
+  } catch(e) {}
+}
+
+function renderLiveRace(players) {
+  const el = document.getElementById('leaderboard');
+  if (!players.length) { el.innerHTML = '<div class="lb-loading">Waiting for players...</div>'; return; }
+  el.innerHTML = players.map((p, i) => {
+    const isMe = discordUser && p.user_id === discordUser.id;
+    const rank = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `#${i+1}`;
+    const rankCls = i === 0 ? 'gold' : i === 1 ? 'silver' : i === 2 ? 'bronze' : '';
+    const avatarEl = p.avatar
+      ? `<img class="lb-avatar" src="${p.avatar}" alt="">`
+      : `<div class="lb-avatar-placeholder">${(p.username||'?')[0].toUpperCase()}</div>`;
+    const statusDot = p.alive
+      ? `<span style="color:#4ade80;font-size:0.6rem">●</span>`
+      : `<span style="color:#ef4444;font-size:0.6rem">✕</span>`;
+    return `
+      <div class="lb-row ${isMe ? 'me' : ''}">
+        <span class="lb-rank ${rankCls}">${rank}</span>
+        ${avatarEl}
+        <span class="lb-name">${escHtml(p.username||'?')}${isMe?' 👈':''}</span>
+        ${statusDot}
+        <span class="lb-score">${p.score.toLocaleString()}</span>
+      </div>`;
+  }).join('');
+}
+
+function startLivePolling() {
+  stopLivePolling();
+  joinLiveSession();
+  pollLivePlayers();
+  livePollingInterval = setInterval(async () => {
+    if (state === 'playing') {
+      await updateLiveScore(score, true);
+      await pollLivePlayers(); // always update live during game
+    } else if (currentTab === 'live') {
+      await pollLivePlayers();
+    }
+  }, 2500);
+}
+
+function stopLivePolling() {
+  if (livePollingInterval) { clearInterval(livePollingInterval); livePollingInterval = null; }
+}
 
 async function saveScore(scoreVal) {
   if (!discordUser) return;
@@ -360,6 +483,16 @@ function renderLeaderboard(rows) {
 function escHtml(s) {
   return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 }
+let currentTab = 'live';
+function showTab(tab) {
+  currentTab = tab;
+  document.getElementById('tabLive').classList.toggle('active', tab==='live');
+  document.getElementById('tabAll').classList.toggle('active', tab==='all');
+  if (tab==='live') pollLivePlayers();
+  else loadLeaderboard();
+}
+window.showTab = showTab;
+
 function setLbStatus(msg) {
   const el = document.getElementById('lbSaveStatus');
   if (el) el.textContent = msg;
@@ -822,6 +955,7 @@ async function showGameOver(){
   document.getElementById('startBtn').textContent='RETRY!';
   document.getElementById('overlay').style.display='flex';
   setLbStatus('Saving score...');
+  await updateLiveScore(score, false); // mark as dead in live session
   await saveScore(score);
   await loadLeaderboard();
   state='menu';
@@ -836,11 +970,13 @@ function startGame(){
   resetPlayer();generatePlatforms();generateStars();
   player.vy=JUMP_VEL;
   document.getElementById('overlay').style.display='none';
+  showTab('live'); // switch to live race tab
+  startLivePolling();
   state='playing';
 }
 
 document.getElementById('startBtn').addEventListener('click',startGame);
-document.getElementById('lbRefresh').addEventListener('click',loadLeaderboard);
+document.getElementById('lbRefresh').addEventListener('click',()=>{ loadLeaderboard(); pollLivePlayers(); });
 window.addEventListener('keydown',e=>{
   if(!keys[e.key]) keys[e.key]=1; else keys[e.key]=2;
   if(state==='menu'&&(e.key===' '||e.key==='Enter'))startGame();
@@ -859,7 +995,8 @@ window.addEventListener('deviceorientation',e=>{
 });
 
 generateStars();
-loadLeaderboard(); // load on startup
+loadLeaderboard();
+pollLivePlayers();
 loop();
 </script>
 </body>
