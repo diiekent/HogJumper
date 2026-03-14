@@ -8,125 +8,212 @@
   @import url('https://fonts.googleapis.com/css2?family=Schoolbell&family=Patrick+Hand&display=swap');
   * { margin:0; padding:0; box-sizing:border-box; }
   body {
-    background: #1a1025;
+    background: #0e0818;
     display: flex; justify-content: center; align-items: center;
     min-height: 100vh; font-family: 'Patrick Hand', cursive; overflow: hidden;
-    background-image: radial-gradient(circle at 20% 30%, #2d1b4e 0%, transparent 55%),
-                      radial-gradient(circle at 80% 70%, #1e0d3a 0%, transparent 55%);
+    background-image: radial-gradient(circle at 15% 40%, #2d1b4e 0%, transparent 50%),
+                      radial-gradient(circle at 85% 60%, #1e0d3a 0%, transparent 50%);
   }
-  #gameWrapper { position:relative; display:flex; flex-direction:column; align-items:center; gap:8px; }
+
+  /* ── Main 3-column layout ── */
+  #layout {
+    display: grid;
+    grid-template-columns: 220px 380px 220px;
+    grid-template-rows: auto 1fr;
+    gap: 12px;
+    align-items: start;
+    max-height: 100vh;
+    padding: 12px;
+  }
+
+  /* Title spans all 3 columns */
   #title {
+    grid-column: 1 / -1;
     font-family:'Schoolbell',cursive; font-size:2.0rem; color:#c9aaff;
-    text-shadow:0 0 12px #7c3aed,2px 2px 0 #4c1d95; letter-spacing:2px; user-select:none;
+    text-shadow:0 0 12px #7c3aed,2px 2px 0 #4c1d95; letter-spacing:2px;
+    user-select:none; text-align:center;
   }
+
+  /* ── Panels ── */
+  .panel {
+    background: rgba(124,58,237,0.08);
+    border: 1px solid rgba(124,58,237,0.3);
+    border-radius: 14px;
+    padding: 14px;
+    display: flex; flex-direction: column; gap: 10px;
+    backdrop-filter: blur(4px);
+  }
+  .panel-title {
+    font-family:'Schoolbell',cursive; font-size:1.1rem; color:#c9aaff;
+    text-shadow:0 0 8px #7c3aed; text-align:center; border-bottom:1px solid rgba(124,58,237,0.3);
+    padding-bottom:8px;
+  }
+
+  /* ── Left panel ── */
+  #leftPanel { align-self: start; }
+  .how-to-row {
+    display:flex; align-items:flex-start; gap:8px; font-size:0.78rem; color:#c4b5fd; line-height:1.5;
+  }
+  .how-to-row span:first-child { font-size:1rem; flex-shrink:0; }
+  .platform-row {
+    display:flex; align-items:center; gap:6px; font-size:0.75rem; color:#a78bfa; padding:3px 0;
+  }
+  .plat-dot { width:10px; height:10px; border-radius:3px; flex-shrink:0; }
+  .mode-btn {
+    font-family:'Patrick Hand',cursive; font-size:0.8rem; color:#c4b5fd;
+    background:rgba(88,101,242,0.15); border:1px solid rgba(124,58,237,0.4);
+    border-radius:8px; padding:7px 10px; cursor:pointer; text-align:left;
+    transition:background .15s, border-color .15s; width:100%;
+  }
+  .mode-btn:hover { background:rgba(124,58,237,0.3); border-color:#7c3aed; }
+  .mode-btn.active { background:rgba(124,58,237,0.4); border-color:#a78bfa; color:#fff; }
+  .mode-btn .mode-name { font-size:0.88rem; color:#fff; display:block; }
+  .mode-btn .mode-desc { font-size:0.7rem; color:#8b7aa0; }
+
+  /* ── Middle panel (game) ── */
+  #gameWrapper { display:flex; flex-direction:column; align-items:center; gap:6px; }
   #gameContainer {
-    position:relative; border:3px solid #7c3aed; border-radius:12px; overflow:hidden;
-    box-shadow:0 0 24px rgba(124,58,237,0.5), 0 8px 32px rgba(0,0,0,0.6), inset 0 0 0 2px #a78bfa;
+    position:relative; border:2px solid #7c3aed; border-radius:12px; overflow:hidden;
+    box-shadow:0 0 24px rgba(124,58,237,0.5), 0 8px 32px rgba(0,0,0,0.6);
   }
   canvas { display:block; background:#1e1033; }
+
+  /* Overlay */
   #overlay {
     position:absolute; inset:0; display:flex; flex-direction:column; align-items:center;
     justify-content:center; background:rgba(20,10,40,0.95); backdrop-filter:blur(3px);
-    z-index:10; gap:10px; padding:16px;
+    z-index:10; gap:8px; padding:14px;
   }
-  #overlay h2 { font-family:'Schoolbell',cursive; font-size:2.2rem; color:#c9aaff; text-align:center;
-    text-shadow:0 0 14px #7c3aed; }
-  .score-display { font-size:1.3rem; color:#a78bfa; text-align:center; }
-  .best-display  { font-size:1rem;   color:#7c3aed; text-align:center; }
+  #overlay h2 { font-family:'Schoolbell',cursive; font-size:2rem; color:#c9aaff; text-align:center; text-shadow:0 0 14px #7c3aed; }
+  .score-display { font-size:1.2rem; color:#a78bfa; text-align:center; }
+  .best-display  { font-size:0.95rem; color:#7c3aed; text-align:center; }
   #startBtn {
-    font-family:'Schoolbell',cursive; font-size:1.5rem; color:#fff; background:#5865f2;
-    border:3px solid #4752c4; border-radius:50px; padding:10px 36px; cursor:pointer;
+    font-family:'Schoolbell',cursive; font-size:1.4rem; color:#fff; background:#5865f2;
+    border:3px solid #4752c4; border-radius:50px; padding:9px 32px; cursor:pointer;
     box-shadow:0 4px 0 #3541a0, 0 0 20px rgba(88,101,242,0.5); transition:transform .1s,box-shadow .1s; user-select:none;
   }
   #startBtn:hover { transform:translateY(-2px); box-shadow:0 6px 0 #3541a0, 0 0 28px rgba(88,101,242,0.7); }
   #startBtn:active { transform:translateY(2px); box-shadow:0 2px 0 #3541a0; }
-  #controls { font-size:0.78rem; color:#8b7aa0; text-align:center; line-height:1.7; }
-  #leaderboard {
-    width: 100%; max-height: 200px; overflow-y: auto;
-    background: rgba(124,58,237,0.12); border: 1px solid rgba(124,58,237,0.3);
-    border-radius: 10px; padding: 8px 6px;
-    scrollbar-width: thin; scrollbar-color: #7c3aed transparent;
-  }
-  #leaderboard::-webkit-scrollbar { width: 4px; }
-  #leaderboard::-webkit-scrollbar-thumb { background: #7c3aed; border-radius: 4px; }
-  #lbTitle {
-    font-family:'Schoolbell',cursive; font-size:1.1rem; color:#c9aaff;
-    text-align:center; margin-bottom:6px; text-shadow:0 0 8px #7c3aed;
-  }
-  .lb-row {
-    display:flex; align-items:center; gap:8px; padding:4px 6px;
-    border-radius:6px; margin-bottom:3px; font-size:0.82rem; color:#e2d9f3;
-    transition: background 0.2s;
-  }
-  .lb-row:nth-child(odd) { background: rgba(88,101,242,0.1); }
-  .lb-row.me { background: rgba(124,58,237,0.3); border: 1px solid rgba(167,139,250,0.4); }
-  .lb-rank { font-family:'Schoolbell',cursive; font-size:1rem; color:#a78bfa; width:22px; text-align:center; flex-shrink:0; }
-  .lb-rank.gold   { color:#fbbf24; text-shadow: 0 0 6px #fbbf24; }
-  .lb-rank.silver { color:#cbd5e1; text-shadow: 0 0 6px #cbd5e1; }
-  .lb-rank.bronze { color:#d97706; text-shadow: 0 0 6px #d97706; }
-  .lb-avatar {
-    width:24px; height:24px; border-radius:50%; border:1px solid #7c3aed;
-    flex-shrink:0; object-fit:cover; background:#2d1b4e;
-  }
-  .lb-avatar-placeholder {
-    width:24px; height:24px; border-radius:50%; border:1px solid #7c3aed;
-    flex-shrink:0; background:#4c1d95; display:flex; align-items:center; justify-content:center;
-    font-size:11px; color:#c4b5fd;
-  }
-  .lb-name { flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-  .lb-score { font-family:'Schoolbell',cursive; color:#c9aaff; flex-shrink:0; }
-  .lb-loading { text-align:center; color:#7c3aed; font-size:0.85rem; padding:10px; }
-  #lbStatus { font-size:0.72rem; color:#6d5a8a; text-align:center; min-height:14px; }
+  #overlayControls { font-size:0.72rem; color:#8b7aa0; text-align:center; line-height:1.6; }
+  #lbStatus { font-size:0.7rem; color:#6d5a8a; text-align:center; min-height:12px; }
+
+  /* HUD */
   #hud {
-    position:absolute; top:10px; left:0; right:0;
-    display:flex; justify-content:space-between; padding:0 12px;
+    position:absolute; top:8px; left:0; right:0;
+    display:flex; justify-content:space-between; padding:0 10px;
     pointer-events:none; z-index:5;
   }
-  .hud-item { font-family:'Schoolbell',cursive; font-size:1.1rem; color:#c9aaff; text-shadow:0 0 8px #7c3aed; }
-  #mobileControls { display:none; gap:16px; margin-top:4px; align-items:center; }
+  .hud-item { font-family:'Schoolbell',cursive; font-size:1.05rem; color:#c9aaff; text-shadow:0 0 8px #7c3aed; }
+
+  /* Mobile controls */
+  #mobileControls { display:none; gap:14px; align-items:center; }
   .mBtn {
-    width:60px; height:60px; background:rgba(88,101,242,0.2); border:3px solid #7c3aed;
-    border-radius:50%; font-size:1.6rem; cursor:pointer; display:flex; align-items:center;
+    width:56px; height:56px; background:rgba(88,101,242,0.2); border:2px solid #7c3aed;
+    border-radius:50%; font-size:1.5rem; cursor:pointer; display:flex; align-items:center;
     justify-content:center; user-select:none; -webkit-user-select:none; touch-action:none;
-    box-shadow:0 3px 0 #4c1d95, 0 0 10px rgba(124,58,237,0.3); transition:transform .1s,box-shadow .1s;
+    box-shadow:0 3px 0 #4c1d95; transition:transform .1s,box-shadow .1s;
   }
   .mBtn:active { transform:translateY(2px); box-shadow:0 1px 0 #4c1d95; }
-  #shootBtn { width:52px; height:52px; font-size:1.3rem; background:rgba(88,101,242,0.25); border-color:#5865f2; }
+  #shootBtn { width:48px; height:48px; font-size:1.2rem; background:rgba(88,101,242,0.25); border-color:#5865f2; }
   @media (pointer:coarse) { #mobileControls { display:flex; } }
+
+  /* ── Right panel (leaderboard) ── */
+  #rightPanel { align-self: start; }
+  #leaderboard {
+    width:100%; max-height: 400px; overflow-y:auto;
+    scrollbar-width:thin; scrollbar-color:#7c3aed transparent;
+  }
+  #leaderboard::-webkit-scrollbar { width:3px; }
+  #leaderboard::-webkit-scrollbar-thumb { background:#7c3aed; border-radius:3px; }
+  .lb-row {
+    display:flex; align-items:center; gap:7px; padding:5px 6px;
+    border-radius:7px; margin-bottom:3px; font-size:0.78rem; color:#e2d9f3;
+  }
+  .lb-row:nth-child(odd) { background:rgba(88,101,242,0.1); }
+  .lb-row.me { background:rgba(124,58,237,0.3); border:1px solid rgba(167,139,250,0.4); }
+  .lb-rank { font-family:'Schoolbell',cursive; font-size:0.95rem; color:#a78bfa; width:20px; text-align:center; flex-shrink:0; }
+  .lb-rank.gold   { color:#fbbf24; text-shadow:0 0 6px #fbbf24; }
+  .lb-rank.silver { color:#cbd5e1; text-shadow:0 0 6px #cbd5e1; }
+  .lb-rank.bronze { color:#d97706; text-shadow:0 0 6px #d97706; }
+  .lb-avatar { width:22px; height:22px; border-radius:50%; border:1px solid #7c3aed; flex-shrink:0; object-fit:cover; }
+  .lb-avatar-placeholder {
+    width:22px; height:22px; border-radius:50%; border:1px solid #7c3aed;
+    flex-shrink:0; background:#4c1d95; display:flex; align-items:center; justify-content:center;
+    font-size:10px; color:#c4b5fd;
+  }
+  .lb-name { flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .lb-score { font-family:'Schoolbell',cursive; color:#c9aaff; flex-shrink:0; font-size:0.85rem; }
+  .lb-loading { text-align:center; color:#7c3aed; font-size:0.8rem; padding:10px; }
+  #lbRefresh {
+    font-family:'Patrick Hand',cursive; font-size:0.75rem; color:#7c3aed;
+    background:none; border:1px solid rgba(124,58,237,0.3); border-radius:6px;
+    padding:4px 10px; cursor:pointer; transition:background .15s; width:100%;
+  }
+  #lbRefresh:hover { background:rgba(124,58,237,0.2); color:#c4b5fd; }
+  #lbSaveStatus { font-size:0.68rem; color:#6d5a8a; text-align:center; min-height:12px; }
 </style>
 </head>
 <body>
-<div id="gameWrapper">
-  <div id="title">HogJumper</div>
-  <div id="gameContainer">
-    <canvas id="canvas" width="360" height="560"></canvas>
-    <div id="hud">
-      <span class="hud-item" id="scoreHud">0</span>
-      <span class="hud-item" id="livesHud">💜💜💜</span>
-      <span class="hud-item" id="bestHud">Best:0</span>
-    </div>
-    <div id="overlay">
-      <h2>HogJumper</h2>
-      <div class="score-display" id="finalScore"></div>
-      <div class="best-display"  id="finalBest"></div>
-      <div id="leaderboardSection" style="width:100%;display:none;">
-        <div id="lbTitle">🏆 Top Scores</div>
-        <div id="leaderboard"><div class="lb-loading">Loading...</div></div>
+<div id="layout">
+  <!-- Title -->
+  <div id="title">🎮 HogJumper</div>
+
+  <!-- LEFT PANEL -->
+  <div class="panel" id="leftPanel">
+    <div class="panel-title">📖 How to Play</div>
+    <div class="how-to-row"><span>⬅️➡️</span><span>Move left / right (A/D)</span></div>
+    <div class="how-to-row"><span>🔫</span><span>SPACE / ↑ to shoot</span></div>
+    <div class="how-to-row"><span>🎯</span><span>Land on platforms to bounce higher</span></div>
+    <div class="how-to-row"><span>💀</span><span>Don't fall off the bottom!</span></div>
+
+    <div class="panel-title" style="margin-top:4px">🟦 Platforms</div>
+    <div class="platform-row"><div class="plat-dot" style="background:#5865f2"></div> Normal – safe</div>
+    <div class="platform-row"><div class="plat-dot" style="background:#7c3aed"></div> Moving – slides</div>
+    <div class="platform-row"><div class="plat-dot" style="background:#ef4444"></div> Breaking – one jump</div>
+    <div class="platform-row"><div class="plat-dot" style="background:#a78bfa"></div> Spring – mega boost</div>
+    <div class="platform-row"><div class="plat-dot" style="background:#ec4899"></div> Teleport – random pos</div>
+
+    <div class="panel-title" style="margin-top:4px">⚡ Power-ups</div>
+    <div class="how-to-row"><span>🚀</span><span>Jetpack – fly upward</span></div>
+    <div class="how-to-row"><span>🛡️</span><span>Shield – blocks one hit</span></div>
+    <div class="how-to-row"><span>💎</span><span>Nitro coins – +10 pts</span></div>
+    <div class="how-to-row"><span>👾</span><span>Shoot monsters for +50!</span></div>
+  </div>
+
+  <!-- MIDDLE – game -->
+  <div id="gameWrapper">
+    <div id="gameContainer">
+      <canvas id="canvas" width="360" height="560"></canvas>
+      <div id="hud">
+        <span class="hud-item" id="scoreHud">0</span>
+        <span class="hud-item" id="livesHud">💜💜💜</span>
+        <span class="hud-item" id="bestHud">Best:0</span>
+      </div>
+      <div id="overlay">
+        <h2>HogJumper</h2>
+        <div class="score-display" id="finalScore"></div>
+        <div class="best-display"  id="finalBest"></div>
         <div id="lbStatus"></div>
+        <button id="startBtn">START!</button>
+        <div id="overlayControls">
+          ← → / A D · Move &nbsp;|&nbsp; SPACE / ↑ · Shoot<br>
+          Bounce as high as possible!
+        </div>
       </div>
-      <button id="startBtn">START!</button>
-      <div id="controls">
-        ← → / A D &nbsp;·&nbsp; Move<br>
-        SPACE / ↑ / Click &nbsp;·&nbsp; Shoot<br>
-        🟦 Normal &nbsp; 🟣 Moving &nbsp; 🔴 Breaking &nbsp; 💜 Spring &nbsp; 🩷 Teleport<br>
-        ⭐ Coins &nbsp;|&nbsp; 🚀 Jetpack &nbsp;|&nbsp; 🛡️ Shield &nbsp;|&nbsp; 👾 Shoot monsters!
-      </div>
+    </div>
+    <div id="mobileControls">
+      <div class="mBtn" id="leftBtn">◀</div>
+      <div class="mBtn" id="shootBtn">🔫</div>
+      <div class="mBtn" id="rightBtn">▶</div>
     </div>
   </div>
-  <div id="mobileControls">
-    <div class="mBtn" id="leftBtn">◀</div>
-    <div class="mBtn" id="shootBtn">🔫</div>
-    <div class="mBtn" id="rightBtn">▶</div>
+
+  <!-- RIGHT PANEL – leaderboard -->
+  <div class="panel" id="rightPanel">
+    <div class="panel-title">🏆 Leaderboard</div>
+    <div id="leaderboard"><div class="lb-loading">Loading...</div></div>
+    <div id="lbSaveStatus"></div>
+    <button id="lbRefresh">↻ Refresh</button>
   </div>
 </div>
 
@@ -274,7 +361,7 @@ function escHtml(s) {
   return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 }
 function setLbStatus(msg) {
-  const el = document.getElementById('lbStatus');
+  const el = document.getElementById('lbSaveStatus');
   if (el) el.textContent = msg;
 }
 
@@ -729,29 +816,18 @@ function loop(timestamp){
   requestAnimationFrame(loop);
 }
 
-let lbRefreshInterval = null;
-
 async function showGameOver(){
   document.getElementById('finalScore').textContent='⭐ Score: '+Math.floor(score);
   document.getElementById('finalBest').textContent='🏆 Best Result: '+Math.floor(best);
   document.getElementById('startBtn').textContent='RETRY!';
-  document.getElementById('controls').style.display='none';
-  document.getElementById('leaderboardSection').style.display='block';
   document.getElementById('overlay').style.display='flex';
   setLbStatus('Saving score...');
   await saveScore(score);
   await loadLeaderboard();
   state='menu';
-  // Auto-refresh leaderboard every 10 seconds
-  if(lbRefreshInterval) clearInterval(lbRefreshInterval);
-  lbRefreshInterval = setInterval(()=>{
-    if(state==='menu') loadLeaderboard();
-    else clearInterval(lbRefreshInterval);
-  }, 10000);
 }
 
 function startGame(){
-  if(lbRefreshInterval){ clearInterval(lbRefreshInterval); lbRefreshInterval=null; }
   initAC();AC.resume();
   score=0;lives=3;cameraY=0;frameCount=0;shootCooldown=0;screenShake=0;
   particles=[];floatTexts=[];bullets=[];monsters=[];coins=[];powerups=[];
@@ -764,6 +840,7 @@ function startGame(){
 }
 
 document.getElementById('startBtn').addEventListener('click',startGame);
+document.getElementById('lbRefresh').addEventListener('click',loadLeaderboard);
 window.addEventListener('keydown',e=>{
   if(!keys[e.key]) keys[e.key]=1; else keys[e.key]=2;
   if(state==='menu'&&(e.key===' '||e.key==='Enter'))startGame();
@@ -781,7 +858,9 @@ window.addEventListener('deviceorientation',e=>{
   if(t<-10){mLeft=true;mRight=false;}else if(t>10){mRight=true;mLeft=false;}else{mLeft=false;mRight=false;}
 });
 
-generateStars();loop();
+generateStars();
+loadLeaderboard(); // load on startup
+loop();
 </script>
 </body>
 </html>
